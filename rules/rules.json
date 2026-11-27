@@ -1,0 +1,61 @@
+{
+  "id": 1001,
+  "name": "ADHook 官方精选通用去广告规则",
+  "version": 4,
+  "author": "ADHook",
+  "description": "精选主流应用开屏广告、横幅卡片与推广节点折叠规则（开源社区维护，支持在线拉取更新）",
+  "updateUrl": "https://raw.githubusercontent.com/a742870158/ADHook/main/rules/rules.json",
+  "updatedAt": 1793439350000,
+  "apps": [
+    {
+      "id": "com.autonavi.minimap",
+      "name": "高德地图 (兜底补充)",
+      "rules": [
+        {
+          "id": "amap_operate_widget",
+          "name": "消除地图悬浮运营活动挂件",
+          "type": "res_id",
+          "targetValue": "com.autonavi.minimap:id/operate_activity_widget",
+          "action": "collapse",
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "com.sup.android.superb",
+      "name": "皮皮虾 (兜底补充)",
+      "rules": [
+        {
+          "id": "ppx_banner_top",
+          "name": "移除首页顶部长条推广横幅",
+          "type": "res_id",
+          "targetValue": "com.sup.android.superb:id/banner_ad_container",
+          "action": "collapse",
+          "enabled": true
+        },
+        {
+          "id": "ppx_red_packet",
+          "name": "移除首页悬浮红包挂件",
+          "type": "res_id",
+          "targetValue": "com.sup.android.superb:id/floating_red_packet_view",
+          "action": "collapse",
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "tv.danmaku.bili",
+      "name": "哔哩哔哩 (兜底补充)",
+      "rules": [
+        {
+          "id": "bili_mall_tab",
+          "name": "折叠底栏会员购与推广入口",
+          "type": "res_id",
+          "targetValue": "tv.danmaku.bili:id/tab_mall_container",
+          "action": "collapse",
+          "enabled": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+name: Bug report
+description: 报告可复现的缺陷（不要在此披露安全漏洞）
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        安全漏洞请走 [私密报告](https://github.com/a742870158/ADHook/security/advisories/new)，不要发在这里。
+        宿主广告效果与广告 SDK 兼容问题，请附上宿主包名、版本、设备与日志；没有运行时证据的报告可能无法定位。
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 问题描述
+      description: 实际发生了什么？期望是什么？
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 安装版本 ...
+        2. LSPosed 作用域 ...
+        3. 打开 ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: ADHook 版本
+      description: 设置页显示的 versionName，或 GitHub Release Tag
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: 设备与系统
+      description: 机型、Android 版本、LSPosed / LibXposed 版本
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相关日志
+      description: 请先脱敏账号、包名以外的隐私信息
+      render: text
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 确认
+      options:
+        - label: 我已阅读文档并确认这不是宿主插件缺失或未授权导致的问题
+          required: true

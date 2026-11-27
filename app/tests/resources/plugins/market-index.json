@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "name": "ADHook Test Market",
+  "updatedAt": 1795787151703,
+  "entries": [
+    {
+      "id": "com.adhook.plugin.sample",
+      "name": "示例插件",
+      "summary": "签名/打包烟测",
+      "author": "ADHook",
+      "targets": [
+        "com.example.host"
+      ],
+      "release": {
+        "version": "1.0.0",
+        "versionCode": 10000,
+        "abi": 2,
+        "minBaseVersionCode": 30000000,
+        "zipUrl": "plugins/com.adhook.plugin.sample-1.0.0.zip",
+        "sha256": "34ad1c0f701d356e6a4bfca6eebf5fa8fbc48550c26568ae432c695345ea5645",
+        "size": 2034,
+        "publisher": {
+          "keyId": "a4d572957cbfe5324b4c8aaece0b878e",
+          "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEjO+euGPK/lB451QQIiTtcGd59Wx0OKB2qe6zjb9ScLbOCppuja3fpTVUi/SMpmSU5oGsqKF8LtWETK2/ZTM62w=="
+        },
+        "publishedAt": 1795787145364,
+        "changelog": ""
+      }
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ADHook</string>
+    <string name="module_label">ADHook 规则中心</string>
+    <string name="app_detail_label">应用规则配置</string>
+</resources>

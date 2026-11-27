@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全漏洞（私密报告）
+    url: https://github.com/a742870158/ADHook/security/advisories/new
+    about: 请勿在公开 Issue 中披露可被利用的漏洞细节。
+  - name: 使用与构建文档
+    url: https://github.com/a742870158/ADHook#readme
+    about: 安装、构建、插件与规则的使用说明。

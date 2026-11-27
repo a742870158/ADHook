@@ -1,0 +1,59 @@
+# Gradle 构建缓存与配置
+.gradle/
+.kotlin/
+build/
+app/build/
+local.properties
+*.bak
+
+# 构建产物
+*.apk
+*.idsig
+*.sha256
+
+# 本机环境、工具链与个人脚本（只留在本地，不入库）
+/.local/
+
+# 逆向分析与测试调试资源
+/apk/
+/dump/
+/ref/
+/src/
+/tools/jadx/
+/tools/jadx*.zip
+/tools/frida/
+
+# 只跟踪显式维护的 Python 工具；其余本地研究脚本默认忽略
+/tools/*.py
+!/tools/ad_inspector.py
+!/tools/github_release.py
+!/tools/quality_checks.py
+!/tools/source_guards.py
+!/tools/test_index.py
+!/tools/verify_apk_signature.py
+!/tools/plugin_abi.py
+!/tools/plugin_package.py
+/tools/*.sh
+
+# 本地签名材料（绝不提交私钥或口令）
+*.keystore
+*.jks
+*.p12
+*.pfx
+/signing.properties
+*.keystore.bak
+*.jks.bak
+
+# Python 字节码与缓存
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 系统与编辑器缓存
+.acl-repair/
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+.omo/

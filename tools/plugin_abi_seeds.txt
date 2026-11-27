@@ -1,0 +1,27 @@
+# Classes that host plugins may link against (plugin ABI seeds).
+# tools/plugin_abi.py computes the signature closure of these classes and their
+# public/protected signatures, then generates the R8 keep file and allowlist.
+# Changing this file or the referenced signatures requires a PLUGIN_ABI bump.
+com.adhook.runtime.HookBridge
+com.adhook.runtime.HookCallback
+com.adhook.runtime.HookHelpers
+com.adhook.runtime.HookReplacement
+com.adhook.runtime.HostContext
+com.adhook.core.FeatureGuard
+com.adhook.core.HookRegistration
+com.adhook.core.HostHook
+com.adhook.core.AdHookLog
+com.adhook.core.ClassFingerprintProbe
+com.adhook.core.ViewCollapser
+com.adhook.core.ViewListenerRegistry
+com.adhook.core.ActivityUiCoordinator
+com.adhook.core.PackerClassLoaderProbe
+com.adhook.core.ObserverHookRegistry
+com.adhook.sdk.SdkHookRegistry
+com.adhook.sdk.UniversalSdkBlocker
+com.adhook.sdk.UniversalActivityBlocker
+com.adhook.config.ConfigClient
+com.adhook.config.model.AppConfig
+com.adhook.config.model.FeatureMeta
+com.adhook.hook.support.SemanticMembers
+com.adhook.hook.support.SplashActivityCompletion

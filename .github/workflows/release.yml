@@ -1,0 +1,144 @@
+name: Build & Release APK
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing immutable version tag to build and publish
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.validate.outputs.tag }}
+      version_name: ${{ steps.validate.outputs.version_name }}
+    steps:
+      - id: validate
+        name: Validate the release tag
+        env:
+          RAW_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          python - <<'PY'
+          import os, re
+          tag = os.environ['RAW_TAG']
+          if not re.fullmatch(r'v[0-9][0-9A-Za-z._+-]{0,99}', tag) or '..' in tag or tag.endswith('.'):
+              raise SystemExit('Invalid immutable release tag')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'tag={tag}\nversion_name={tag[1:]}\n')
+          PY
+
+  checks:
+    needs: version
+    uses: ./.github/workflows/quality.yml
+    with:
+      ref: refs/tags/${{ needs.version.outputs.tag }}
+    permissions:
+      contents: read
+
+  publish:
+    needs: [version, checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: release
+    permissions:
+      contents: write
+    env:
+      STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      SIGNING_CERT_SHA256: ${{ secrets.SIGNING_CERT_SHA256 }}
+      RELEASE_TAG: ${{ needs.version.outputs.tag }}
+      ADHOOK_VERSION_NAME: ${{ needs.version.outputs.version_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refs/tags/${{ needs.version.outputs.tag }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install declared Android toolchain
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Prepare private signing material (no fallback)
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          export KEYSTORE_FILE="$RUNNER_TEMP/adhook-signing/release.keystore"
+          printf 'KEYSTORE_FILE=%s\n' "$KEYSTORE_FILE" >> "$GITHUB_ENV"
+          for name in SIGNING_KEYSTORE_BASE64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD SIGNING_CERT_SHA256; do
+            if [ -z "${!name}" ]; then echo "Missing required release secret: $name" >&2; exit 1; fi
+          done
+          umask 077
+          mkdir -p "$(dirname "$KEYSTORE_FILE")"
+          printf '%s' "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_FILE"
+      - name: Build and verify the signed release
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:testDebugUnitTest :app:lintRelease :app:assembleRelease :app:verifyPluginAbiMapping :app:pluginApiJar :app:baseTestClassesJar --no-daemon --stacktrace --console=plain
+          python tools/verify_apk_signature.py --apk app/build/outputs/apk/release/app-release.apk
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk "dist/ADHook-${RELEASE_TAG}.apk"
+          (cd dist && sha256sum "ADHook-${RELEASE_TAG}.apk" > "ADHook-${RELEASE_TAG}.apk.sha256")
+      - name: Add stable test-classes alias
+        run: |
+          set -euo pipefail
+          mapfile -t test_jars < <(find app/build/plugin-sdk -maxdepth 1 -type f \
+            -name 'adhook-test-classes-*.jar' ! -name 'adhook-test-classes.jar' | sort)
+          if [ "${#test_jars[@]}" -ne 1 ]; then
+            echo "::error::expected exactly one versioned test-classes jar, found ${#test_jars[@]}"
+            printf '%s\n' "${test_jars[@]}"
+            exit 1
+          fi
+          cp "${test_jars[0]}" app/build/plugin-sdk/adhook-test-classes.jar
+      - name: Upload host-plugin SDK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: adhook-plugin-sdk
+          if-no-files-found: error
+          path: app/build/plugin-sdk/*.jar
+      - name: Upload built release APK as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: adhook-release-apk
+          if-no-files-found: error
+          path: dist/*
+      - name: Publish only after draft uploads are verified
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          assets=()
+          for jar in app/build/plugin-sdk/*.jar; do
+            test -s "$jar"
+            ( cd "$(dirname "$jar")" && sha256sum "$(basename "$jar")" ) > "$jar.sha256"
+            assets+=(--asset "$jar" --asset "$jar.sha256")
+          done
+          python tools/github_release.py --repo "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" \
+            --apk "dist/ADHook-${RELEASE_TAG}.apk" --sha "dist/ADHook-${RELEASE_TAG}.apk.sha256" \
+            "${assets[@]}"
+      - name: Remove temporary signing material
+        if: always()
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']).resolve()
+          expected = root / 'adhook-signing' / 'release.keystore'
+          supplied = Path(os.environ.get('KEYSTORE_FILE', str(expected)))
+          if supplied.absolute() != expected.absolute() or root not in supplied.resolve().parents:
+              raise SystemExit('Unexpected signing path; cleanup refused')
+          supplied.unlink(missing_ok=True)
+          PY

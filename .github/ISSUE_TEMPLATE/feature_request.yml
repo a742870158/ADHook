@@ -1,0 +1,44 @@
+name: Feature request
+description: 提出底座能力、文档或工程改进建议
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        本仓库只接受**底座能力**：通用 Hook、规则引擎、拾取器、插件运行时/市场、配置与安全。
+        宿主专属去广告、界面折叠与协议适配属于独立插件仓库，请不要在此提交。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 要解决的问题
+      description: 当前行为、影响范围与复现条件
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案
+      description: 你希望怎么改？是否考虑过替代方案？
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 影响范围
+      options:
+        - 通用 Hook / 规则引擎
+        - 插件运行时 / ABI / 市场
+        - 配置、备份与授权
+        - UI / 拾取器
+        - 构建、CI 与发布
+        - 文档
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 确认
+      options:
+        - label: 该需求属于底座能力，而不是某个宿主应用的专属适配
+          required: true

@@ -1,0 +1,70 @@
+name: Quality Gates
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - 'NOTICE'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install declared Android toolchain
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Check repository invariants
+        env:
+          REQUESTED_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          BASE="${REQUESTED_BASE:-HEAD}"
+          if [[ "$BASE" =~ ^0+$ ]]; then BASE=HEAD; fi
+          python tools/quality_checks.py --base-ref "$BASE"
+      - name: Test maintained tools without network
+        run: python -m unittest discover -s tools/tests -p 'test_*.py' -v
+      - name: Compile, run JVM regressions and lint
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:testDebugUnitTest :app:lintDebug :app:verifyPluginAbiSurface --no-daemon --stacktrace --console=plain
+      - name: Upload test and lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-reports
+          if-no-files-found: ignore
+          path: |
+            app/build/reports/
+            app/build/test-results/
+            build/reports/
