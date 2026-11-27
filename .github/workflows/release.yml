@@ -57,7 +57,7 @@ jobs:
       RELEASE_TAG: ${{ needs.version.outputs.tag }}
       ADHOOK_VERSION_NAME: ${{ needs.version.outputs.version_name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: refs/tags/${{ needs.version.outputs.tag }}
