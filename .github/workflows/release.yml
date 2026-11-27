@@ -105,13 +105,13 @@ jobs:
           fi
           cp "${test_jars[0]}" app/build/plugin-sdk/adhook-test-classes.jar
       - name: Upload host-plugin SDK artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: adhook-plugin-sdk
           if-no-files-found: error
           path: app/build/plugin-sdk/*.jar
       - name: Upload built release APK as a workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: adhook-release-apk
           if-no-files-found: error

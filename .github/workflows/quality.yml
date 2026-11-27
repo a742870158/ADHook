@@ -60,7 +60,7 @@ jobs:
           ./gradlew :app:testDebugUnitTest :app:lintDebug :app:verifyPluginAbiSurface --no-daemon --stacktrace --console=plain
       - name: Upload test and lint reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: quality-reports
           if-no-files-found: ignore
