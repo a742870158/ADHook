@@ -872,7 +872,7 @@ class EndToEndTests(unittest.TestCase):
         manifest = archive.manifest
         self.assertEqual(1, manifest["schema"])
         self.assertEqual("com.adhook.plugin.demo", manifest["id"])
-        self.assertEqual(1, manifest["abi"])
+        self.assertEqual(2, manifest["abi"])
         self.assertEqual("测试作者", manifest["authorName"])
         self.assertEqual(["com.example.host"],
                          [target["packageName"] for target in manifest["targets"]])
