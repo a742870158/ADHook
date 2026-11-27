@@ -147,7 +147,9 @@ tasks.matching { it.name == "validateSigningRelease" }
     .configureEach { dependsOn(validateReleaseCredentials) }
 
 tasks.withType<Test>().configureEach {
-    systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
+    // Robolectric downloads its SDK jar lazily; use the same public mirror as Gradle
+    // dependencies so clean CI runners do not depend on Maven Central reachability.
+    systemProperty("robolectric.dependency.repo.url", "https://maven.aliyun.com/repository/public")
     testLogging { events("failed", "skipped"); exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL }
 }
 
