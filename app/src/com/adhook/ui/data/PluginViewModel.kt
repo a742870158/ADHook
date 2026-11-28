@@ -35,7 +35,11 @@ data class PluginUiState(
     /** The pending signed publisher has never been trusted; confirm must explicitly trust it. */
     val pendingTrust: Boolean = false,
     /** Human-readable origin of [pendingPreview] (local file or market source). */
-    val pendingSourceLabel: String = ""
+    val pendingSourceLabel: String = "",
+    /** Currently opened installed-plugin detail; README is loaded lazily. */
+    val detail: PluginDetailUi? = null,
+    val detailLoading: Boolean = false,
+    val detailError: String? = null
 )
 
 class PluginViewModel(
@@ -46,6 +50,7 @@ class PluginViewModel(
     private val mutableState = MutableStateFlow(PluginUiState())
     val state: StateFlow<PluginUiState> = mutableState
     private var refreshJob: Job? = null
+    private var detailJob: Job? = null
     private var generation = 0L
     private var pendingFile: File? = null
     private var pendingMarket: MarketEntryUi? = null
@@ -85,6 +90,31 @@ class PluginViewModel(
                 }
             }
         }
+    }
+
+    /** Loads the detail page for one installed plugin, including its optional Markdown README. */
+    fun openDetail(id: String) {
+        detailJob?.cancel()
+        update { it.copy(detail = null, detailLoading = true, detailError = null) }
+        detailJob = scope.launch {
+            try {
+                val detail = repository.detail(id)
+                if (detail == null) {
+                    update { it.copy(detailLoading = false, detailError = "插件安装记录不存在或已卸载") }
+                } else {
+                    update { it.copy(detail = detail, detailLoading = false, detailError = null) }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                update { it.copy(detailLoading = false, detailError = failure.message ?: "插件详情加载失败") }
+            }
+        }
+    }
+
+    fun closeDetail() {
+        detailJob?.cancel()
+        update { it.copy(detail = null, detailLoading = false, detailError = null) }
     }
 
     /** [force] downloads every enabled source; without it only the last successful cache is read. */
@@ -239,23 +269,6 @@ class PluginViewModel(
         if (file != null) scope.launch { repository.discardImport(file) }
     }
 
-    fun setEnabled(id: String, enabled: Boolean) = action {
-        if (repository.setEnabled(id, enabled)) {
-            update {
-                it.copy(
-                    message = if (enabled) {
-                        "插件已启用；已运行的目标应用需强退重开生效"
-                    } else {
-                        "插件已停用；已运行的目标应用需强退重开生效"
-                    }
-                )
-            }
-            refreshAll()
-        } else {
-            update { it.copy(error = "插件开关保存失败：安装记录异常或插件不存在") }
-        }
-    }
-
     fun uninstall(id: String) = action {
         if (repository.uninstall(id)) {
             update { it.copy(message = "插件已卸载；已运行的目标应用需强退重开，已保存的用户规则不受影响") }
@@ -330,6 +343,7 @@ class PluginViewModel(
     override fun onCleared() {
         ++generation
         refreshJob?.cancel()
+        detailJob?.cancel()
         super.onCleared()
     }
 }

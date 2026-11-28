@@ -50,16 +50,12 @@ public class PluginStoreTest {
         assertEquals(2, store.list().size());
         assertNotNull(store.find("com.example.aa"));
 
-        assertTrue(store.setEnabled("com.example.aa", false));
-        assertFalse(store.find("com.example.aa").isEnabled());
-        assertTrue(store.setEnabled("com.example.aa", false)); // idempotent
         assertTrue(store.remove("com.example.bb"));
         assertNull(store.find("com.example.bb"));
 
         PluginStore reloaded = store();
         assertTrue(reloaded.isHealthy());
         assertEquals(1, reloaded.count());
-        assertFalse(reloaded.find("com.example.aa").isEnabled());
         assertTrue(reloaded.find("com.example.aa").getTargets().get(0).matches("com.example.target1"));
     }
 

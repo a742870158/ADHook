@@ -8,7 +8,7 @@
 
 - 浏览器或命令行的“最近一次结果”以 [GitHub Actions](<https://github.com/a742870158/ADHook/actions>) 与本地实际输出为准；本文不固定测试计数，避免文档读数过期。
 - 底座内置宿主始终为 **0**：不包含宿主 Hook、宿主包名清单、宿主文档或 `docs/apps`。宿主适配由独立插件提供，插件能力与验收状态由各插件仓库维护。
-- 签名 APK 只由 GitHub Actions 在版本 Tag 上构建；仓库不保存历史 APK，也不把本地构建当作发布产物。
+- 正式发布 APK 只由 GitHub Actions 在版本 Tag 上构建；本地可以用同一正式证书构建并安装到设备验证，但仓库不保存历史 APK，本地构建不是发布产物。
 - 远端 CI、真机注入、真实广告效果属于不同证据层，不能互相替代。
 
 ## 支持环境与源集
@@ -29,7 +29,7 @@ python -m unittest discover -s tools/tests -p 'test_*.py' -v
 ./gradlew :app:testDebugUnitTest :app:lintDebug :app:verifyPluginAbiSurface --console=plain
 ```
 
-Windows 使用 `.\gradlew.bat`。`verifyPluginAbiMapping` 依赖 `assembleRelease`，由 Release 工作流执行，本地不必重复。
+Windows 使用 `.\gradlew.bat`。`verifyPluginAbiMapping` 依赖 `assembleRelease`；正式发布由 Release 工作流执行，本地设备验证可按下一节对正式签名包重复执行。
 
 - [仓库门禁](<../tools/quality_checks.py>)校验私密材料是否 tracked（只查文件名）、目录/作用域、官方规则身份、测试源集、生命周期短路、API101 依赖/类型/元数据、CI 平台、R8 范围、本地文档链接、仓库卫生（本机绝对路径、个人账号、具体插件仓库名）、[静态源码守卫](<../tools/source_guards.py>)与测试索引是否同步。
 - 抗混淆检测仍是启发式：指定修复文件零新增/全量约束，其余按 base-ref 增量；域名/包目录与只用于 View tag 的键依据上下文排除。框架栈名字串不是旧 API 依赖，不因过滤字符串移除安全保护。
@@ -40,9 +40,26 @@ Windows 使用 `.\gradlew.bat`。`verifyPluginAbiMapping` 依赖 `assembleReleas
 - [离线工具测试](<../tools/tests/>) mock 网络、git/gh、Gradle、账号/签名配置；失败测试不得真发布或读取生产秘密。
 - Lint 错误中止；保留具体 Xposed 场景的精确豁免，警告按反射资源、API 行为、性能/弃用分类。不能全局关 Lint，不能把 R8 当 Lint。
 
+## 本地正式签名构建与设备验证
+
+本地验证包必须与已安装应用使用同一正式证书，不能使用 debug 证书或新生成身份。签名材料只放在本机且不入库：
+
+- 环境变量：`KEYSTORE_FILE`、`STORE_PASSWORD`、`KEY_ALIAS`、`KEY_PASSWORD`、`SIGNING_CERT_SHA256`。
+- 或仓库根未跟踪的 `signing.properties`：`storeFile`、`storePassword`、`keyAlias`、`keyPassword`、`certificateSha256`。
+
+```bash
+# 缺少正式签名或指纹不匹配时 assembleRelease 会直接失败
+./gradlew :app:assembleRelease :app:verifyPluginAbiMapping --console=plain
+python tools/verify_apk_signature.py --apk app/build/outputs/apk/release/app-release.apk \
+  --expected-sha256 <与已安装应用一致的签名证书 SHA-256>
+adb install -r app/build/outputs/apk/release/app-release.apk
+```
+
+本地构建只用于测试、Lint、ABI 与设备验证，不产出也不上传 Release 资产；发布仍只走 Tag 工作流。若设备已安装应用与本地证书不一致，停止并核对，不卸载应用、不清数据、不用 debug 包覆盖。
+
 ## 构建与发布
 
-**本仓库不提供本地打包或发布脚本。** 唯一的签名构建与发布出口是 [Release 工作流](<../.github/workflows/release.yml>)：
+正式发布的唯一出口是 [Release 工作流](<../.github/workflows/release.yml>)：
 
 1. 推送形如 `v1.0.20261127` 的不可变 Tag（或手动 `workflow_dispatch` 指定已存在 Tag）。
 2. 复用 [Quality Gates](<../.github/workflows/quality.yml>)，对同一 Tag 跑仓库约束、离线工具测试、JVM 回归、Lint 与插件 ABI surface。
@@ -69,24 +86,24 @@ Windows 使用 `.\gradlew.bat`。`verifyPluginAbiMapping` 依赖 `assembleReleas
 详细合同见[配置安全](<CONFIG_SECURITY.md>)：
 
 - 正式 API101 启动/完整快照同版本发布，启动版本不能冒充完整规则；后台鉴权校准，回调内存，主线程零 Provider 同步调用。保存、发布、消费与效果分开。
-- AppConfig 存在、列表/详情、开关和备份都不授予宿主权限；shared UID 不连带授权，外部 Intent 只导航，私有授权不随备份导入。
+- 宿主数据默认授权但仅限调用者实际拥有的包；AppConfig 存在、列表/详情、开关和备份不改变授权判定，shared UID 不连带其它包，外部 Intent 只导航，授权判定不随备份导入。
 - picker/remote 来源与逐条偏好独立；namespace/subscription/pkg/upstreamID 是身份，名称/简类名不是。旧同 ID 归属歧义保留并提示，不静默覆盖/删除。
 - 订阅输入按原始类型预校验，非法项拒绝整份更新，不静默丢字段。
 - 恢复先全量验证、保存恢复前快照；任一步失败反馈并尽力回滚，不静默清空。断电/多文件备份流程仍非跨文件耐久事务，保留人工恢复材料。
 
 ## 正式签名
 
-**保留既有证书身份，不自动换钥匙。** 正式 keystore、口令、私配不进入 Git，也不写入仓库脚本。签名只在 GitHub Actions 中通过环境变量注入：
+**保留既有证书身份，不自动换钥匙。** 正式 keystore、口令、私配不进入 Git，也不写入仓库脚本。CI 通过 GitHub Actions Secrets 注入环境变量；本地可在未跟踪的 `signing.properties` 中提供同名键：
 
-| 环境变量 | 含义 |
-| --- | --- |
-| `KEYSTORE_FILE` | runner 临时目录中的 keystore 路径 |
-| `STORE_PASSWORD` | keystore 口令 |
-| `KEY_ALIAS` | 签名 alias |
-| `KEY_PASSWORD` | key 口令 |
-| `SIGNING_CERT_SHA256` | 期望的证书 SHA-256 指纹 |
+| 环境变量 | 本地 properties 键 | 含义 |
+| --- | --- | --- |
+| `KEYSTORE_FILE` | `storeFile` | keystore 路径 |
+| `STORE_PASSWORD` | `storePassword` | keystore 口令 |
+| `KEY_ALIAS` | `keyAlias` | 签名 alias |
+| `KEY_PASSWORD` | `keyPassword` | key 口令 |
+| `SIGNING_CERT_SHA256` | `certificateSha256` | 期望的证书 SHA-256 指纹 |
 
-[app/build.gradle.kts](<../app/build.gradle.kts>) 在缺少这些变量时不会读取任何本地文件；debug 在无签名环境使用默认 debug 证书，release 由工作流注入。纯编译/Lint/单测不要求生产签名。
+[app/build.gradle.kts](<../app/build.gradle.kts>) 优先读取环境变量，其次读取未跟踪的 `signing.properties`；`assembleRelease` 依赖证书指纹校验，缺少材料或指纹不匹配时失败，不会回退 debug 证书。纯编译/Lint/单测不要求生产签名。
 
 停止 tracked 不删除 Git 历史/其它克隆的旧秘密。访问控制、历史重写、轮换及 Android 升级兼容由负责人独立授权；本轮不读秘密值、不改历史、不配远端 Secrets。
 

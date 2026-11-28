@@ -62,8 +62,8 @@ python tools/ad_inspector.py jadx-class "<APK>" "<完整类名>" -o "apk/jadx_ou
 2. 用 `tools/plugin_package.py build --sign` 生成签名 zip；清单 features 必须与入口 `getFeatures()` 一致（FeatureExtractor 校验，失败即构建失败）。构建只依赖底座发布的 `adhook-plugin-api-<abi>.jar` + `android.jar`，不打包框架实现。
 3. 插件 ABI 改动只通过底座 `PLUGIN_ABI` 版本推进；底座 release 必须通过 `verifyPluginAbiSurface` / `verifyPluginAbiMapping`。插件仓库 CI 复用同一套源码守卫与测试。
 4. 插件发布后先在目标设备完成安装/强退/重开/功能验收；底座不保存宿主清单，也不把“注册成功”当作效果证明。
-5. 底座侧只有通用层、插件运行时/市场、ABI 或授权语义变化时才改 scope/授权契约；安装插件不改变 LSPosed 作用域，也不等于宿主授权或 Hook 启用，均由用户显式确认。
-6. 插件入口类加载失败时 fail-open 到通用层：不回退已删除的内置适配，不重放第二个适配。没有目标包的插件加载日志时，先确认插件已启用、框架支持 remote files、dex 已发布且 ABI/底座版本匹配，再强退重开。
+5. 底座侧只有通用层、插件运行时/市场、ABI 或授权语义变化时才改 scope/授权契约；安装插件不改变 LSPosed 作用域，但安装即默认启用；插件功能规则默认关闭，需在应用详情逐个开启。
+6. 插件入口类加载失败时 fail-open 到通用层：不回退已删除的内置适配，不重放第二个适配。没有目标包的插件加载日志时，先确认插件已安装、框架支持 remote files、dex 已发布且 ABI/底座版本匹配，再强退重开。
 
 不短路 Activity super.onCreate；必要退出仅在正常生命周期后确认安全去向。未知任务根、异常或路由失败放行。
 

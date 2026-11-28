@@ -1,7 +1,6 @@
 package com.adhook.config.security;
 
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.Signature;
@@ -12,45 +11,28 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Private grants, separate from rule/configuration data and every configuration backup.
- * No built-in host catalog, lazy grant, migration from AppConfig, or exported grant API exists.
+ * Default host authorization: a caller may access only packages it actually owns.
+ *
+ * <p>There is no user grant switch anymore. The Binder caller UID is resolved by the Provider and
+ * each owned package is checked against PackageManager metadata; a missing package, UID mismatch
+ * or unreadable signing metadata still fails closed. shared UID does not authorize unrelated
+ * packages because {@link CallerPolicy} only exposes the caller's own package set.</p>
  */
 public final class HostAuthorizationStore {
-    private static final String PREFS = "adhook_host_authorizations";
-    private static final int MAX_USER_GRANTS = 2000;
     private final Context context;
-    private final SharedPreferences preferences;
 
     public HostAuthorizationStore(Context context) {
         this.context = context.getApplicationContext();
-        preferences = this.context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
     public boolean isAuthorized(String pkg, int uid) {
         if (!ConfigInputPolicy.isPackageName(pkg) || uid < 0) return false;
-        String grant = preferences.getString(pkg, null);
-        if (grant == null) return false;
-        String identity = installedIdentity(pkg, uid);
-        return identity != null && identity.equals(grant);
+        return installedIdentity(pkg, uid) != null;
     }
 
     public boolean isAuthorized(String pkg) {
         try {
             return isAuthorized(pkg, context.getPackageManager().getApplicationInfo(pkg, 0).uid);
-        } catch (PackageManager.NameNotFoundException ignored) {
-            return false;
-        }
-    }
-
-    /** Call only after an explicit in-console user confirmation, on an IO thread. */
-    public synchronized boolean setUserAuthorized(String pkg, boolean authorized) {
-        if (!ConfigInputPolicy.isPackageName(pkg)) return false;
-        if (!authorized) return preferences.edit().remove(pkg).commit();
-        try {
-            if (!preferences.contains(pkg) && preferences.getAll().size() >= MAX_USER_GRANTS) return false;
-            int uid = context.getPackageManager().getApplicationInfo(pkg, 0).uid;
-            String identity = installedIdentity(pkg, uid);
-            return identity != null && preferences.edit().putString(pkg, identity).commit();
         } catch (PackageManager.NameNotFoundException ignored) {
             return false;
         }

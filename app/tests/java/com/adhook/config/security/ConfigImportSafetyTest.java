@@ -87,7 +87,7 @@ public class ConfigImportSafetyTest {
         assertTrue(result.contains("已保存"));
         assertTrue(result.contains("独立状态"));
         assertEquals("imported-rule", manager.getAppConfigSnapshot(PKG).getCustomRules().get(0).getId());
-        assertFalse(manager.getAppConfigSnapshot(PKG).isHookEnabled());
+        assertTrue(manager.getAppConfigSnapshot(PKG).isHookEnabled());
         stop(); reset(); manager = ConfigManager.getInstance(context);
         assertEquals("imported-rule", manager.getAppConfigSnapshot(PKG).getCustomRules().get(0).getId());
         assertEquals(format == 2, manager.getGlobalConfigSnapshot().isRuleToastEnabled());
@@ -129,7 +129,7 @@ public class ConfigImportSafetyTest {
         stop(); reset(); manager = ConfigManager.getInstance(context);
         assertTrue(manager.isConfigBroken());
         assertFalse(manager.save());
-        assertFalse(manager.setHookEnabled(PKG, true));
+        assertFalse(manager.setInspectorEnabled(PKG, true));
         for (int format = 0; format < 3; format++) {
             String json = input(format);
             assertThrows(IllegalStateException.class, () -> manager.importJson(json));

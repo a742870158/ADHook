@@ -200,18 +200,6 @@ fun AppListItemCard(
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
                             textColor = MaterialTheme.colorScheme.primary
                         )
-                        if (!item.pluginEnabled) {
-                            Spacer(modifier = Modifier.width(6.dp))
-                            AdBadge(
-                                text = "插件已禁用",
-                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                textColor = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    }
-                    if (item.isHookOn) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        AdBadge(text = "Hook")
                     }
                 }
 
@@ -221,16 +209,9 @@ fun AppListItemCard(
                     when {
                         item.pluginId != null -> {
                             append("插件「${item.pluginName ?: item.pluginId}」")
-                            if (item.pluginEnabled) {
-                                append(" · 已启用 ${item.enabledNative}/${item.totalNative} 项功能")
-                            } else {
-                                append(" · 插件已禁用，启用后生效")
-                            }
+                            append(" · 已开启 ${item.enabledNative}/${item.totalNative} 项功能")
                         }
                         else -> append("通用联盟断源托管")
-                    }
-                    if (item.isHookOn) {
-                        append(" · 含 Hook")
                     }
                     if (item.customCount > 0) {
                         append(" · ${item.customCount} 条自定义")

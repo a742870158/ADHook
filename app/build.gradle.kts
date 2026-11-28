@@ -3,6 +3,7 @@ import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -23,15 +24,23 @@ val appVersionName = providers.gradleProperty("versionName").orNull
     ?: providers.environmentVariable("ADHOOK_VERSION_NAME").orNull
     ?: ("1.0." + SimpleDateFormat("yyMMdd.HHmm", Locale.CHINA).format(Date(buildEpochMillis)))
 
-// Release signing comes only from the GitHub Actions environment. There is no local keystore
-// fallback and no committed credential: local builds are for tests, lint and ABI checks.
-fun signingEnv(name: String): String? =
-    providers.environmentVariable(name).orNull?.takeIf { it.isNotBlank() }
-val signingFile = signingEnv("KEYSTORE_FILE")?.let { rootProject.file(it) }
-val signingStorePassword = signingEnv("STORE_PASSWORD")
-val signingAlias = signingEnv("KEY_ALIAS")
-val signingKeyPassword = signingEnv("KEY_PASSWORD")
-val signingCertificateSha256 = signingEnv("SIGNING_CERT_SHA256")
+// Release signing comes from the GitHub Actions environment or a local, gitignored
+// signing.properties. Local builds may use the same formal signing identity for device
+// verification, but the credential and the keystore never enter Git.
+val localSigningProperties = rootProject.file("signing.properties")
+val localSigning = Properties().apply {
+    if (localSigningProperties.isFile) {
+        localSigningProperties.inputStream().use { stream -> load(stream) }
+    }
+}
+fun signingValue(envName: String, propertyName: String): String? =
+    providers.environmentVariable(envName).orNull?.takeIf { it.isNotBlank() }
+        ?: localSigning.getProperty(propertyName)?.takeIf { it.isNotBlank() }
+val signingFile = signingValue("KEYSTORE_FILE", "storeFile")?.let { rootProject.file(it) }
+val signingStorePassword = signingValue("STORE_PASSWORD", "storePassword")
+val signingAlias = signingValue("KEY_ALIAS", "keyAlias")
+val signingKeyPassword = signingValue("KEY_PASSWORD", "keyPassword")
+val signingCertificateSha256 = signingValue("SIGNING_CERT_SHA256", "certificateSha256")
 
 val validateReleaseCredentials = tasks.register("validateReleaseCredentials") {
     group = "verification"
@@ -44,7 +53,10 @@ val validateReleaseCredentials = tasks.register("validateReleaseCredentials") {
             "KEY_PASSWORD/keyPassword" to signingKeyPassword,
             "SIGNING_CERT_SHA256/certificateSha256" to signingCertificateSha256
         ).filter { it.second.isNullOrBlank() }.map { it.first }
-        check(missing.isEmpty()) { "Missing release signing settings: ${missing.joinToString()}. Set them through GitHub Actions Secrets." }
+        check(missing.isEmpty()) {
+            "Missing release signing settings: ${missing.joinToString()}. " +
+                "Set them through GitHub Actions Secrets or a local, untracked signing.properties."
+        }
         val file = checkNotNull(signingFile)
         check(file.isFile) { "Release keystore file is missing. No debug signing fallback is allowed." }
         val expected = checkNotNull(signingCertificateSha256).replace(":", "").replace(" ", "").uppercase(Locale.ROOT)
@@ -144,6 +156,10 @@ android {
 }
 
 tasks.matching { it.name == "validateSigningRelease" }
+    .configureEach { dependsOn(validateReleaseCredentials) }
+
+// Local release packaging must use the pinned formal certificate; no debug/unsigned fallback.
+tasks.matching { it.name == "assembleRelease" }
     .configureEach { dependsOn(validateReleaseCredentials) }
 
 tasks.withType<Test>().configureEach {

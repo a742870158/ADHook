@@ -100,20 +100,6 @@ public class PluginStore {
         return false;
     }
 
-    public synchronized boolean setEnabled(String pluginId, boolean enabled) {
-        if (!healthy || pluginId == null) return false;
-        int index = indexOf(pluginId);
-        if (index < 0) return false;
-        InstalledPlugin current = plugins.get(index);
-        if (current.isEnabled() == enabled) return true;
-        List<InstalledPlugin> snapshot = new ArrayList<>(plugins);
-        plugins.set(index, current.copyWithEnabled(enabled));
-        if (save()) return true;
-        plugins.clear();
-        plugins.addAll(snapshot);
-        return false;
-    }
-
     public synchronized boolean isHealthy() { return healthy; }
 
     public synchronized int count() { return plugins.size(); }

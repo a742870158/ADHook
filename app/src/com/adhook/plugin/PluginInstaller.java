@@ -164,13 +164,11 @@ public final class PluginInstaller {
                 pinned = true;
             }
 
-            InstalledPlugin existing = store.find(manifest.getId());
             InstalledPlugin record = new InstalledPlugin(manifest.getId(), manifest.getName(),
                     manifest.getVersion(), manifest.getVersionCode(), manifest.getAbi(),
                     manifest.getMinBaseVersionCode(), manifest.getEntry(), manifest.getAuthorName(),
                     manifest.getDescription(), manifest.getTargets(), manifest.getFeatures(),
                     sourceId != null ? sourceId : "",
-                    existing == null || existing.isEnabled(),
                     System.currentTimeMillis(), manifest.getPublisherKeyId(),
                     PluginSignature.fingerprint(manifest.publisherPublicKeyDer()),
                     fresh.zipSha256, PluginFiles.sha256Hex(pkg.dex),
@@ -195,10 +193,6 @@ public final class PluginInstaller {
         InstalledPlugin existing = store.find(pluginId);
         if (existing != null && !store.remove(pluginId)) return false;
         return deleteInstalledFiles(context, pluginId);
-    }
-
-    public boolean setEnabled(String pluginId, boolean enabled) {
-        return store.setEnabled(pluginId, enabled);
     }
 
     /** Explicit UI action: forget the pinned publisher for an uninstalled/removed plugin. */

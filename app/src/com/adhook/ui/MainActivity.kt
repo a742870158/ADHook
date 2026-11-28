@@ -39,7 +39,6 @@ class MainActivity : ComponentActivity() {
     private lateinit var repository: ConsoleRepository
     private lateinit var pluginViewModel: PluginViewModel
     private val currentTab = mutableIntStateOf(2)
-    private val pendingPluginId = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -54,31 +53,24 @@ class MainActivity : ComponentActivity() {
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
                 PluginViewModel(PluginRepository(applicationContext)) as T
         })[PluginViewModel::class.java]
-        // External Intent only selects a plugin for display; it cannot install or enable anything.
-        val requestedPlugin = PluginNavigation.pluginId(intent)
-        pendingPluginId.value = requestedPlugin
-        if (requestedPlugin != null) currentTab.intValue = PLUGIN_TAB
         setContent {
             ADHookTheme {
                 val state by viewModel.state.collectAsState()
+                var pluginSettingsOpen by remember { mutableStateOf(false) }
+                var pluginDetailOpen by remember { mutableStateOf(false) }
                 LaunchedEffect(state.snapshot.globalConfig.isExcludeFromRecents) {
                     applyExcludeFromRecents(this@MainActivity, state.snapshot.globalConfig.isExcludeFromRecents)
                 }
                 MainScreen(repository, state, viewModel::refresh, viewModel::setSdkEnabled,
-                    viewModel::dismissError, viewModel::dismissNotice, currentTab.intValue, { currentTab.intValue = it },
-                    pluginViewModel, pendingPluginId.value, { pendingPluginId.value = null }) { pkg, _ ->
+                    viewModel::dismissError, viewModel::dismissNotice, currentTab.intValue,
+                    { currentTab.intValue = it }, pluginViewModel,
+                    pluginSettingsOpen, pluginDetailOpen,
+                    { pluginDetailOpen = it }, { pluginSettingsOpen = true },
+                    { pluginSettingsOpen = false }) { pkg, _ ->
                     startActivity(Intent(this, AppDetailActivity::class.java).putExtra("package_name", pkg))
                 }
             }
         }
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        val requestedPlugin = PluginNavigation.pluginId(intent) ?: return
-        pendingPluginId.value = requestedPlugin
-        currentTab.intValue = PLUGIN_TAB
     }
 
     override fun onResume() {
@@ -86,11 +78,9 @@ class MainActivity : ComponentActivity() {
         viewModel.refresh()
         if (::pluginViewModel.isInitialized) pluginViewModel.refreshAll()
     }
-
-    private companion object {
-        const val PLUGIN_TAB = 4
-    }
 }
+
+private const val PLUGIN_TAB = 3
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -104,8 +94,11 @@ fun MainScreen(
     currentTab: Int,
     onTabSelected: (Int) -> Unit,
     pluginViewModel: PluginViewModel,
-    pluginInitialId: String?,
-    onPluginIntentConsumed: () -> Unit,
+    pluginSettingsOpen: Boolean,
+    pluginDetailOpen: Boolean,
+    onPluginDetailVisibilityChanged: (Boolean) -> Unit,
+    onOpenPluginSettings: () -> Unit,
+    onClosePluginSettings: () -> Unit,
     onOpenAppDetail: (String, String) -> Unit
 ) {
     val context = LocalContext.current
@@ -140,19 +133,28 @@ fun MainScreen(
                     Spacer(Modifier.width(10.dp))
                     Text("ADHook", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 18.sp))
                 }
+            }, actions = {
+                if (currentTab == PLUGIN_TAB && !pluginSettingsOpen && !pluginDetailOpen) {
+                    IconButton(onClick = onOpenPluginSettings) {
+                        Icon(Icons.Default.Settings, "插件设置")
+                    }
+                }
             }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background))
         },
         bottomBar = {
             NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp) {
-                listOf("全局", "规则", "应用", "关于", "插件").forEachIndexed { index, label ->
+                listOf("全局", "规则", "应用", "插件", "关于").forEachIndexed { index, label ->
                     val icon = when (index) {
                         0 -> if (currentTab == index) Icons.Default.Security else Icons.Outlined.Security
                         1 -> if (currentTab == index) Icons.Default.Dns else Icons.Outlined.Dns
                         2 -> if (currentTab == index) Icons.Default.Apps else Icons.Outlined.Apps
-                        3 -> if (currentTab == index) Icons.Default.Info else Icons.Outlined.Info
-                        else -> if (currentTab == index) Icons.Default.Extension else Icons.Outlined.Extension
+                        3 -> if (currentTab == index) Icons.Default.Extension else Icons.Outlined.Extension
+                        else -> if (currentTab == index) Icons.Default.Info else Icons.Outlined.Info
                     }
-                    NavigationBarItem(currentTab == index, { onTabSelected(index) }, { Icon(icon, label) }, label = { Text(label, fontSize = 12.sp) })
+                    NavigationBarItem(currentTab == index, {
+                        if (index != currentTab) onClosePluginSettings()
+                        onTabSelected(index)
+                    }, { Icon(icon, label) }, label = { Text(label, fontSize = 12.sp) })
                 }
             }
         }, containerColor = MaterialTheme.colorScheme.background
@@ -169,9 +171,10 @@ fun MainScreen(
                     }, onImportLocalRules = { importLauncher.launch(arrayOf("application/json", "text/*", "*/*")) })
                 2 -> AppRulesPage(padding, filtered, search, { search = it },
                     { search = "" }, { focus.clearFocus() }, onOpenAppDetail, repository, snapshot.pluginCount)
-                3 -> AboutPage(padding, repository, snapshot.appVersion, snapshot.pluginCount, snapshot.apps.size,
+                3 -> PluginsPage(padding, pluginViewModel, pluginSettingsOpen,
+                    onPluginDetailVisibilityChanged, onOpenPluginSettings, onClosePluginSettings)
+                4 -> AboutPage(padding, repository, snapshot.appVersion, snapshot.pluginCount, snapshot.apps.size,
                     snapshot.globalConfig, onSdkToggle, state.saving, onRefresh)
-                4 -> PluginsPage(padding, pluginViewModel, pluginInitialId, onPluginIntentConsumed)
             }
             if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = padding.calculateTopPadding()))
         }

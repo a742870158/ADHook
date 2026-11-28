@@ -15,24 +15,21 @@ data class AppHookItemState(
     val totalNative: Int,
     val customCount: Int,
     val isInspectorOn: Boolean,
-    val isHookOn: Boolean = false,
     /** Installed plugin targeting this package; null for generic-only hosts. */
     val pluginId: String? = null,
     val pluginVersion: String? = null,
-    val pluginEnabled: Boolean = false,
     val pluginName: String? = null
 )
 
 data class InstalledApp(val pkg: String, val label: String, val system: Boolean = false)
 
-/** One installed plugin target package. */
+/** One installed plugin target package. Plugins are always enabled after installation. */
 data class PluginTargetApp(
     val pkg: String,
     val label: String,
     val pluginId: String,
     val pluginName: String,
     val pluginVersion: String,
-    val enabled: Boolean,
     val features: List<FeatureMeta>
 )
 
@@ -68,26 +65,24 @@ class AppListRepository(
             // System apps stay hidden unless a plugin explicitly targets them.
             if (installed.system && plugin == null) return@mapNotNull null
             val config = snapshot[installed.pkg]
-            // 默认值只有一个来源：AppConfig（无配置条目时用临时对象求值，Hook 默认关闭）。
-            val effectiveConfig = config ?: AppConfig(installed.pkg)
             val features = plugin?.features.orEmpty().filter { it.isImplemented }
             AppHookItemState(
                 pkg = installed.pkg,
                 appName = installed.label,
+                // Plugin features start disabled; only an explicit preference counts as enabled.
                 enabledNative = features.count {
-                    com.adhook.core.FeatureGuard.configuredEnabled(config, installed.pkg, it.id, it.isDefaultEnabled)
+                    com.adhook.core.FeatureGuard.configuredEnabled(config, installed.pkg, it.id, false)
                 },
                 totalNative = features.size,
                 customCount = config?.customRules?.size ?: 0,
                 isInspectorOn = config?.isInspectorEnabled ?: false,
-                isHookOn = effectiveConfig.isHookEnabled,
                 pluginId = plugin?.pluginId,
                 pluginVersion = plugin?.pluginVersion,
-                pluginEnabled = plugin?.enabled == true,
                 pluginName = plugin?.pluginName
             )
-        }.sortedWith(compareByDescending<AppHookItemState> { it.isInspectorOn }
+        }.sortedWith(compareByDescending<AppHookItemState> { it.pluginId != null }
             .thenByDescending { it.customCount > 0 }
+            .thenByDescending { it.isInspectorOn }
             .thenBy { it.appName.lowercase(Locale.ROOT) })
         AppListSnapshot(apps, apps.count { it.pluginId != null })
     }

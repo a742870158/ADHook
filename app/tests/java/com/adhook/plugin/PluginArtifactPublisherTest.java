@@ -119,14 +119,15 @@ public class PluginArtifactPublisherTest {
                 List.of(changed), 1L, ignored -> PluginTestFixtures.sampleDex("com.example.aa:1")).error);
     }
 
-    @Test public void payloadSkipsDisabledPluginsAndFailsWhenTableIsTooLarge() {
-        InstalledPlugin disabled = PluginTestFixtures.installed("com.example.aa", 1, TARGET,
+    @Test public void payloadIgnoresLegacyDisabledFlagAndFailsWhenTableIsTooLarge() {
+        InstalledPlugin legacyDisabled = PluginTestFixtures.installed("com.example.aa", 1, TARGET,
                 "", false);
-        PluginArtifactPublisher.PublishPayload empty = PluginArtifactPublisher.preparePayloadWith(
-                List.of(disabled), 1L, ignored -> PluginTestFixtures.sampleDex("x"));
-        assertNull(empty.error);
-        assertTrue(empty.dexFiles.isEmpty());
-        assertNotNull(PluginRuntimeTable.parse(empty.table));
+        PluginArtifactPublisher.PublishPayload payload = PluginArtifactPublisher.preparePayloadWith(
+                List.of(legacyDisabled), 1L,
+                ignored -> PluginTestFixtures.sampleDex("com.example.aa:1"));
+        assertNull(payload.error);
+        assertEquals(1, payload.dexFiles.size());
+        assertNotNull(PluginRuntimeTable.parse(payload.table));
 
         List<InstalledPlugin> many = new ArrayList<>();
         for (int i = 0; i < 12; i++) {

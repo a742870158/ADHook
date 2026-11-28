@@ -228,7 +228,7 @@ final class PluginTestFixtures {
             return new InstalledPlugin(id, "Plugin " + id, "1.0.0", versionCode,
                     PluginConstants.PLUGIN_ABI, 0, ENTRY, "Tester", "test plugin",
                     List.of(new PluginTarget(targetPackage, "Target", "", List.of())),
-                    new ArrayList<>(), "", true, 1_700_000_000_000L,
+                    new ArrayList<>(), "", 1_700_000_000_000L,
                     "", "", "a".repeat(64), "b".repeat(64), manifestJson);
         } catch (Exception failure) {
             throw new IllegalStateException(failure);
@@ -246,7 +246,7 @@ final class PluginTestFixtures {
                     versionCode, PluginConstants.PLUGIN_ABI, built.manifest.getMinBaseVersionCode(),
                     built.manifest.getEntry(), built.manifest.getAuthorName(),
                     built.manifest.getDescription(), built.manifest.getTargets(),
-                    built.manifest.getFeatures(), "test-source", enabled, 1_700_000_000_000L,
+                    built.manifest.getFeatures(), "test-source", 1_700_000_000_000L,
                     built.manifest.getPublisherKeyId(), fingerprint(keyPair.getPublic()),
                     sha256(built.zipBytes),
                     dexSha256.isEmpty() ? sha256(built.dex) : dexSha256,
@@ -276,7 +276,7 @@ final class PluginTestFixtures {
             return new InstalledPlugin(id, built.manifest.getName(), built.manifest.getVersion(),
                     versionCode, PluginConstants.PLUGIN_ABI, 0, built.manifest.getEntry(),
                     "Tester", "test plugin", built.manifest.getTargets(),
-                    built.manifest.getFeatures(), "", true, 1_700_000_000_000L,
+                    built.manifest.getFeatures(), "", 1_700_000_000_000L,
                     built.manifest.getPublisherKeyId(), fingerprint(keyPair.getPublic()),
                     sha256(built.zipBytes), sha256(built.dex),
                     new String(built.manifestBytes, StandardCharsets.UTF_8));

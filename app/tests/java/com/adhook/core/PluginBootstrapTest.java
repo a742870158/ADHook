@@ -34,7 +34,7 @@ public class PluginBootstrapTest {
         return new InstalledPlugin("com.adhook.plugin.alpha", "测试插件", "1.0.0", 12, PluginConstants.PLUGIN_ABI, 1,
                 "com.example.PluginEntry", "作者", "描述", List.of(target),
                 List.of(new PluginFeature("alpha_feature", "特性", "说明", true, true)),
-                "local", true, 1L, "0011223344556677", "fingerprint",
+                "local", 1L, "0011223344556677", "fingerprint",
                 "b".repeat(64), DEX_SHA, "{}");
     }
 
@@ -87,7 +87,7 @@ public class PluginBootstrapTest {
         assertEquals(1, features.size());
         assertEquals("alpha_feature", features.get(0).getId());
         assertEquals("特性", features.get(0).getName());
-        assertTrue(features.get(0).isDefaultEnabled());
+        assertFalse(features.get(0).isDefaultEnabled());
         assertEquals("com.example.host", PluginBootstrap.primaryOf(
                 table.routes("com.example.host").get(0), "fallback"));
     }

@@ -19,7 +19,8 @@ public final class HookLaunchSnapshot {
             JSONObject app = apps.getJSONObject(name);
             JSONObject features = app.optJSONObject("nativeFeatures");
             switches.put(name, new JSONObject().put("packageName", name)
-                    .put("hookEnabled", app.optBoolean("hookEnabled", false))
+                    // The per-app Hook switch is retired; keep the field for older readers.
+                    .put("hookEnabled", true)
                     .put("inspectorEnabled", app.optBoolean("inspectorEnabled", false))
                     .put("nativeFeatures", features == null ? new JSONObject() : features));
         }

@@ -17,6 +17,7 @@ public class AppConfig {
 
     private String packageName;
     private boolean inspectorEnabled = false;
+    /** Only used by internal tests to exercise the legacy disabled branch; production is always on. */
     private Boolean hookEnabled = null;
     private final Map<String, Boolean> nativeFeatures = new LinkedHashMap<>();
     private final List<CustomRule> customRules = new ArrayList<>();
@@ -86,9 +87,8 @@ public class AppConfig {
         try {
             json.put("packageName", packageName);
             json.put("inspectorEnabled", inspectorEnabled);
-            if (hookEnabled != null) {
-                json.put("hookEnabled", hookEnabled);
-            }
+            // Compatibility: Hook has no user switch anymore, but older readers still expect the field.
+            json.put("hookEnabled", true);
 
             JSONObject features = new JSONObject();
             for (Map.Entry<String, Boolean> entry : nativeFeatures.entrySet()) {
@@ -111,9 +111,7 @@ public class AppConfig {
         AppConfig config = new AppConfig();
         config.packageName = json.optString("packageName", "");
         config.inspectorEnabled = json.optBoolean("inspectorEnabled", false);
-        if (json.has("hookEnabled")) {
-            config.hookEnabled = json.optBoolean("hookEnabled", false);
-        }
+        // Legacy hookEnabled values are intentionally ignored; the current policy is always on.
 
         JSONObject features = json.optJSONObject("nativeFeatures");
         if (features != null) {
@@ -162,14 +160,13 @@ public class AppConfig {
     public void setInspectorEnabled(boolean inspectorEnabled) { this.inspectorEnabled = inspectorEnabled; }
 
     /**
-     * 是否允许向该应用注入 Hook（默认值仅在此处定义）。
+     * 作用域内 Hook 默认执行；不再有每应用用户开关。
      *
-     * 语义：默认关闭。LSPosed 勾选作用域只是注入的必要条件，
-     * 用户还必须在详情页打开 Hook 开关才会真正注入。
-     * 该值在进程启动（dispatch）时一次性判定，修改后需强退重开目标应用。
+     * 持久化的 {@code hookEnabled=false} 属于旧版本遗留值，加载时被忽略。保留 public
+     * setter 仅为插件 ABI 兼容与内部测试覆盖禁用分支，生产入口不调用。
      */
     public boolean isHookEnabled() {
-        return hookEnabled != null && hookEnabled;
+        return hookEnabled == null || hookEnabled;
     }
 
     public Boolean getRawHookEnabled() { return hookEnabled; }

@@ -6,7 +6,7 @@ import com.adhook.core.AdHookLog;
  * 通用 SDK 拦截器总入口。
  * 每次调用都重新探测：同一 ClassLoader 可能在 Application.onCreate 或解壳后追加 dex。
  * 幂等由每个子层的成功 Method/Constructor 注册表保证；“探测过”不能等同于“安装完成”。
- * 联盟 SDK 拦截不再受全局开关控制：应用详情页打开 Hook 开关即全量挂载。
+ * 联盟 SDK 拦截不再受全局开关控制：LSPosed 作用域内 Hook 默认执行即全量挂载。
  */
 public final class UniversalSdkBlocker {
     private UniversalSdkBlocker() {

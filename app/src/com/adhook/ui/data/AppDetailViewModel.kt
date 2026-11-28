@@ -67,33 +67,9 @@ class AppDetailViewModel(private val repository: ConsoleRepository) : ViewModel(
     }
 
     fun inspector(enabled: Boolean) = change { repository.setInspectorEnabled(it, enabled) }
-    fun hook(enabled: Boolean) = change { repository.setHookEnabled(it, enabled) }
-    fun authorize(enabled: Boolean) = change { repository.setHostAuthorized(it, enabled) }
     fun feature(id: String, enabled: Boolean) = change { repository.setFeatureEnabled(it, id, enabled) }
     fun rule(id: String, enabled: Boolean) = change { repository.setRuleEnabled(it, id, enabled) }
     fun remove(id: String) = change { repository.removeRule(it, id) }
-
-    /** Plugin enable/disable from the app detail card; applies to every target of the plugin. */
-    fun pluginEnabled(enabled: Boolean) {
-        val requested = packageName ?: return
-        val pluginId = mutableState.value.snapshot?.plugin?.id ?: return
-        if (mutableState.value.loading) return
-        viewModelScope.launch {
-            try {
-                val ok = repository.setPluginEnabled(pluginId, enabled)
-                if (packageName == requested) {
-                    if (ok) refresh()
-                    else mutableState.value = mutableState.value.copy(error = "插件开关保存失败，请重试")
-                }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Exception) {
-                if (packageName == requested) {
-                    mutableState.value = mutableState.value.copy(error = error.message ?: "插件开关保存失败")
-                }
-            }
-        }
-    }
 
     fun dismissError() { mutableState.value = mutableState.value.copy(error = null) }
 

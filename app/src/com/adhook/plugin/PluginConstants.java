@@ -35,6 +35,9 @@ public final class PluginConstants {
     public static final int MAX_REMOTE_TABLE_BYTES = 64 * 1024;
     public static final int MAX_SIGNATURE_BYTES = 4096;
     public static final int MAX_ASSET_BYTES = 4 * 1024 * 1024;
+    /** Markdown README content is display-only and bounded before it reaches the UI. */
+    public static final int MAX_README_BYTES = 512 * 1024;
+    public static final int MAX_README_PATH_LENGTH = 128;
 
     /** Extra per-plugin limits used by targets/process lists and display text. */
     public static final int MAX_PROCESSES = 16;
@@ -116,6 +119,14 @@ public final class PluginConstants {
     }
 
     /** Strict archive path: ASCII only, relative, no empty/./.. segments and no backslash. */
+    /** README path is relative to the plugin {@code assets/} root and must point at Markdown. */
+    public static boolean isValidReadmePath(String value) {
+        if (value == null || value.isEmpty() || value.length() > MAX_README_PATH_LENGTH) return false;
+        if (!isSafeArchivePath(value) || value.startsWith("assets/")) return false;
+        String lower = value.toLowerCase(java.util.Locale.ROOT);
+        return lower.endsWith(".md") || lower.endsWith(".markdown");
+    }
+
     public static boolean isSafeArchivePath(String value) {
         if (value == null || value.isEmpty() || value.length() > 512) return false;
         if (!ARCHIVE_PATH.matcher(value).matches()) return false;

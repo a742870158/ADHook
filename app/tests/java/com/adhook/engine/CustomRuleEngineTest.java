@@ -86,26 +86,6 @@ public class CustomRuleEngineTest extends EngineTestSupport {
         assertEquals(View.GONE, text.getVisibility());
     }
 
-    @Test public void hookSwitchDisablesAndReleasesOnlyRuleLeasesThenReactivates() throws Exception {
-        FrameLayout row = row();
-        TextView text = label(row, "广告");
-        app.addCustomRule(rule("广告", 1));
-        publish();
-        assertTrue(CustomRuleEngine.matchAndApply(PACKAGE, text));
-        Object other = new Object();
-        ViewCollapser.preventExpansion(row, other);
-        app.setHookEnabled(false);
-        publish();
-        assertFalse(CustomRuleEngine.matchAndApply(PACKAGE, text));
-        assertEquals(View.GONE, row.getVisibility());
-        ViewCollapser.restore(row, other);
-        assertEquals(View.VISIBLE, row.getVisibility());
-        app.setHookEnabled(true);
-        publish();
-        assertTrue(CustomRuleEngine.matchAndApply(PACKAGE, text));
-        assertEquals(View.GONE, row.getVisibility());
-    }
-
     @Test public void unrelatedChildMissCannotRestoreAnotherSourcesTarget() throws Exception {
         FrameLayout row = row();
         TextView ad = label(row, "广告A");

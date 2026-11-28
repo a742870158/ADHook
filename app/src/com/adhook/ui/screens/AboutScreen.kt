@@ -52,7 +52,7 @@ private data class PendingRestore(
 )
 
 /**
- * Tab 3: 关于页面
+ * Tab 4: 关于页面
  */
 @Composable
 fun AboutPage(
@@ -187,7 +187,7 @@ fun AboutPage(
 
                 AboutInfoRow(
                     title = "安全保护隔离",
-                    value = "双通道默认关闭 · 用户选择作用域"
+                    value = "LSPosed 作用域决定注入 · 插件功能默认关闭"
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.surfaceVariant)
 

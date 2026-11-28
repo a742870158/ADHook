@@ -85,7 +85,6 @@ public class PluginRuntimeEndToEndTest {
         assertEquals(InstallError.OK, installed);
         InstalledPlugin record = PluginStore.get(context).find("com.adhook.plugin.sample");
         assertNotNull(record);
-        assertTrue(record.isEnabled());
         assertEquals(10_000, record.getVersionCode());
         PluginManifest manifest = PluginManifest.parse(record.manifestObject());
         assertEquals(PluginTrustStore.TrustCheck.State.TRUSTED, PluginTrustStore.get(context).check(manifest).state);

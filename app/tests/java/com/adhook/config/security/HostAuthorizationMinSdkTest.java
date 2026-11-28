@@ -17,7 +17,7 @@ import org.robolectric.annotation.Implements;
 import org.robolectric.util.ReflectionHelpers;
 import static org.junit.Assert.*;
 
-/** The real authorization store and PackageManager lookup retain their Android 35 metadata behavior. */
+/** Default host authorization still resolves real package/UID/signing metadata on Android 35. */
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest = Config.NONE, sdk = 35, shadows = HostAuthorizationMinSdkTest.CertificateMetadata.class)
 public class HostAuthorizationMinSdkTest {
@@ -34,36 +34,33 @@ public class HostAuthorizationMinSdkTest {
     private static Signature certificate(int value) { return new Signature(new byte[]{(byte) value, 2, 3, 4}); }
     @Before public void setUp() {
         context = RuntimeEnvironment.getApplication();
-        context.getSharedPreferences("adhook_host_authorizations", Context.MODE_PRIVATE).edit().clear().commit();
         info = new PackageInfo(); info.packageName = PKG; info.applicationInfo = new ApplicationInfo();
         info.applicationInfo.packageName = PKG; info.applicationInfo.uid = UID;
         info.signatures = new Signature[]{certificate(1)}; info.signingInfo = null;
         CertificateMetadata.current = null;
         Shadows.shadowOf(context.getPackageManager()).installPackage(info);
-        store = new HostAuthorizationStore(context); assertFalse(store.isAuthorized(PKG));
+        store = new HostAuthorizationStore(context);
     }
 
-    @Test public void nullSigningInfoStillUsesReachableLegacyMetadataFallbackAtSdk35() {
-        assertTrue(store.setUserAuthorized(PKG, true)); assertTrue(store.isAuthorized(PKG, UID));
+    @Test public void installedOwnedPackageIsAuthorizedByDefault() {
+        assertTrue(store.isAuthorized(PKG));
+        assertTrue(store.isAuthorized(PKG, UID));
         assertFalse(store.isAuthorized(PKG, UID + 1));
-        info.signatures = new Signature[]{certificate(7)};
-        Shadows.shadowOf(context.getPackageManager()).installPackage(info);
-        assertFalse(store.isAuthorized(PKG, UID));
+        assertFalse(store.isAuthorized("com.min.sdk.missing", UID));
     }
-    @Test public void modernCurrentSignersStillTakePrecedenceOverLegacyField() {
+
+    @Test public void modernCurrentSignersStillResolveTheInstalledPackage() {
         info.signingInfo = ReflectionHelpers.callConstructor(SigningInfo.class);
         CertificateMetadata.current = new Signature[]{certificate(5)};
         Shadows.shadowOf(context.getPackageManager()).installPackage(info);
-        assertTrue(store.setUserAuthorized(PKG, true));
-        info.signatures = new Signature[]{certificate(9)};
-        Shadows.shadowOf(context.getPackageManager()).installPackage(info);
         assertTrue(store.isAuthorized(PKG, UID));
-        CertificateMetadata.current = new Signature[]{certificate(8)};
-        assertFalse(store.isAuthorized(PKG, UID));
+        assertFalse(store.isAuthorized(PKG, UID + 1));
     }
+
     @Test public void missingSignatureMetadataRemainsFailClosed() {
         info.signatures = null;
         Shadows.shadowOf(context.getPackageManager()).installPackage(info);
-        assertFalse(store.setUserAuthorized(PKG, true)); assertFalse(store.isAuthorized(PKG, UID));
+        assertFalse(store.isAuthorized(PKG));
+        assertFalse(store.isAuthorized(PKG, UID));
     }
 }

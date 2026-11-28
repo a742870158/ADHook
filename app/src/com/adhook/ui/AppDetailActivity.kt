@@ -54,17 +54,7 @@ class AppDetailActivity : ComponentActivity() {
                     }
                 } else {
                     AppDetailScreen(snapshot, state.loading, { finish() },
-                        viewModel::inspector, viewModel::hook, viewModel::authorize,
-                        viewModel::feature, viewModel::rule, viewModel::remove,
-                        viewModel::pluginEnabled,
-                        {
-                            snapshot.plugin?.let { plugin ->
-                                startActivity(
-                                    Intent(this@AppDetailActivity, MainActivity::class.java)
-                                        .putExtra(PluginNavigation.EXTRA_PLUGIN_ID, plugin.id)
-                                )
-                            }
-                        })
+                        viewModel::inspector, viewModel::feature, viewModel::rule, viewModel::remove)
                 }
             }
         }

@@ -563,10 +563,6 @@ public final class ConfigManager {
         return editApp(pkg, true, config -> { config.setInspectorEnabled(enabled); return true; });
     }
 
-    public boolean setHookEnabled(String pkg, boolean enabled) {
-        return editApp(pkg, true, config -> { config.setHookEnabled(enabled); return true; });
-    }
-
     public boolean upsertCustomRule(String pkg, CustomRule rule, int maxRules) {
         if (rule == null || !ConfigInputPolicy.isRuleId(rule.getId()) || maxRules <= 0) return false;
         return editApp(pkg, true, config -> {

@@ -77,7 +77,6 @@ public class PluginInstallerTest {
         assertEquals(InstallError.OK, installer.install(preflight, zip, false, true, "source-1"));
         InstalledPlugin installed = store.find(ID);
         assertNotNull(installed);
-        assertTrue(installed.isEnabled());
         assertEquals("source-1", installed.getSourceId());
         assertEquals(PluginTestFixtures.sha256(built.dex), installed.getDexSha256());
         assertEquals(PluginTestFixtures.sha256(built.zipBytes), installed.getZipSha256());
@@ -271,18 +270,6 @@ public class PluginInstallerTest {
         assertEquals(0, trustStore.count());
         assertFalse(installer.uninstall("../escape"));
         assertFalse(PluginInstaller.deleteInstalledFiles(context, "../escape"));
-    }
-
-    @Test public void disableTogglePersistsThroughStore() throws Exception {
-        PluginTestFixtures.Built built = signed(ID, 1, TARGET, PluginTestFixtures.keyPair());
-        File zip = write(built, "plugin.zip");
-        PluginInstaller installer = installer(1000);
-        assertEquals(InstallError.OK, installer.install(
-                installer.preflight(null, zip, false), zip, false, true, ""));
-        assertTrue(installer.setEnabled(ID, false));
-        assertFalse(store.find(ID).isEnabled());
-        assertTrue(new PluginStore(pluginsDirectory).find(ID) != null);
-        assertFalse(new PluginStore(pluginsDirectory).find(ID).isEnabled());
     }
 
     /** Test seam: force the catalogue commit to fail after files were promoted. */

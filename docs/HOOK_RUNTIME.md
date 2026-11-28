@@ -7,18 +7,18 @@
 ## 两个独立层次
 
 1. **LSPosed 作用域**决定框架是否把模块装入宿主。作用域内提前注册业务方法和轻量观察器，不等待模块 App Provider 启动。
-2. **每应用 Hook 开关**与所属原生 feature 相与，只控制断源、数据改写、折叠和增强的执行；关闭和 UNKNOWN 放行原方法。FeatureGuard 单次取得实际包的内存 AppConfig，用同一对象同时判断总 Hook 与 feature，不组合后台刷新前后两个快照的许可。
+2. **Hook 在作用域内默认执行**；所属原生 feature 只控制断源、数据改写、折叠和增强。feature 关闭和 UNKNOWN 放行原方法；插件 feature 默认关闭，需在应用详情逐个开启。FeatureGuard 单次取得实际包的内存 AppConfig，用同一对象判断 feature，不组合后台刷新前后两个快照的许可。
 
-每应用 Hook 默认关闭，不迁移历史默认值。关闭 Hook 不热卸载钩子、不掩盖框架环境，敏感应用建议不勾作用域。`scope.list` 为空，实际作用域由用户在 LSPosed 中勾选；作用域不等于宿主授权。
+不再提供每应用 Hook 开关；旧配置中的 `hookEnabled=false` 会被忽略并视为默认开启。不勾作用域的应用不会被注入，敏感应用建议不勾作用域。`scope.list` 为空，实际作用域由用户在 LSPosed 中勾选。
 
 ## 宿主插件层
 
 底座不内置任何第三方宿主深度 Hook；宿主深度适配由独立维护的签名插件提供，用户本地导入或从市场镜像安装。插件加载失败一律 fail-open（只保留通用层），不回退已删除的内置适配。
 
 - **发布链路**：主 App 在 IO 线程校验 zip/清单/ECDSA 签名/TOFU/ABI/底座版本/目标冲突后安装到私有目录；`PluginArtifactPublisher` 先把 dex 写入 LSPosed remote files 并校验大小，再把路由快照 commit 到独立 RemotePreferences 组 `adhook_plugins_v1`；最后才清理旧 dex。任一步失败保留旧发布。
-- **宿主加载**：`AdHookModule` 初始化 `PluginBootstrap`；`HookDispatcher.performInjection` 在安装通用 SDK/规则/拾取器后按包名读取一次 remote 快照（≤64KB），匹配插件后用 `InMemoryDexClassLoader` 加载 entry，校验 dex sha256/ABI/minBaseVersion/`HostHook` 身份，再用清单 features 调 `FeatureGuard.configureHost` 并执行 `install`。
+- **宿主加载**：`AdHookModule` 初始化 `PluginBootstrap`；`HookDispatcher.performInjection` 在安装通用 SDK/规则/拾取器后按包名读取一次 remote 快照（≤64KB），匹配插件后用 `InMemoryDexClassLoader` 加载 entry，校验 dex sha256/ABI/minBaseVersion/`HostHook` 身份，再用清单 features（默认全部关闭）调 `FeatureGuard.configureHost` 并执行 `install`。
 - **通道边界**：宿主侧只使用 framework remote preferences / remote files；不调用 ConfigProvider、不解析完整配置、不读宿主私有盘。读取失败、快照非法、哈希不符、缺类或 entry 异常均 fail-open，不得阻断底座通用 Hook，也不得把注册成功当实际拦截。
-- **授权与生效**：安装/启用插件不授权宿主、不创建 AppConfig、不打开 Hook；插件目标的宿主授权仍需用户在应用详情显式确认。禁用/更新/卸载对已运行宿主不热生效，UI 必须提示强退重开。插件加载失败只 fail-open 到通用层，不回放、不补装第二个适配。
+- **生效**：插件安装即默认启用，功能规则默认关闭，需在应用详情逐个开启；安装/更新/卸载不创建 AppConfig、不改变宿主授权判定。更新/卸载对已运行宿主不热生效，UI 必须提示强退重开。插件加载失败只 fail-open 到通用层，不回放、不补装第二个适配。
 - **ABI**：插件只链接底座 ABI 名单中的 public/protected 类。白名单/keep 由 `tools/plugin_abi.py` 从 `tools/plugin_abi_seeds.txt` 生成，release 必须通过 `:app:verifyPluginAbiSurface` 与 `:app:verifyPluginAbiMapping`；破坏链接签名的变更必须提升 `PluginConstants.PLUGIN_ABI`，旧插件在安装与加载两侧都会被安全拒绝。
 
 ## API101 原生调用链与反射边界
@@ -34,8 +34,8 @@
 - [AdHookApplication](<../app/src/com/adhook/AdHookApplication.java>) 注册正式 service101，框架提供的 XposedProvider 由 AAR 合并；不新增外部 Intent/广播写配置入口。
 - [ConfigManager](<../app/src/com/adhook/config/ConfigManager.java>) 串行写盘并单调递增配置版本，[RemoteConfigPublisher](<../app/src/com/adhook/config/RemoteConfigPublisher.java>) 在工作线程同一次 Editor commit 发布完整 config_json 与启动 hook_launch_json。
 - 启动 v2 包含总 Hook、原生偏好、拾取器与全局策略，只供加载早期使用；**启动快照不等于完整规则快照**。同版本 scoped/full 响应仍须升级完整性，不能因已有启动版本而跳过规则装载。
-- [ConfigClient](<../app/src/com/adhook/config/ConfigClient.java>) 在入口读取框架受信启动偏好，回调仅查缓存。完整读取、版本刷新、按宿主授权的 Provider 校准在工作线程；主线程不做 Provider IPC/完整 JSON/磁盘读取。
-- legacy XSharedPreferences、私有文件直读和 world-readable CE/DE 镜像已退休；正式 API101 RemotePreferences 与鉴权后台 Provider 是现役通道。不开公共可写文件通道，不手写 daemon 目录或修改框架数据库。
+- [ConfigClient](<../app/src/com/adhook/config/ConfigClient.java>) 在入口读取框架受信启动偏好，回调仅查缓存。完整读取、版本刷新、按调用者自有包校验的 Provider 校准在工作线程；主线程不做 Provider IPC/完整 JSON/磁盘读取。
+- legacy XSharedPreferences、私有文件直读和 world-readable CE/DE 镜像已退休；正式 API101 RemotePreferences 与按调用者自有包校验的后台 Provider 是现役通道。不开公共可写文件通道，不手写 daemon 目录或修改框架数据库。
 
 ### 保存、发布、消费、效果
 

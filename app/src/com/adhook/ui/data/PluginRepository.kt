@@ -28,6 +28,8 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.net.URI
+import java.nio.charset.StandardCharsets
+import org.json.JSONObject
 import java.security.SecureRandom
 import java.util.Locale
 import java.util.UUID
@@ -55,7 +57,6 @@ data class PluginInstallUi(
     val description: String,
     val targets: List<PluginTarget>,
     val features: List<PluginFeature>,
-    val enabled: Boolean,
     val sourceId: String,
     val publisherKeyId: String,
     val publisherFingerprint: String,
@@ -66,6 +67,13 @@ data class PluginInstallUi(
     val filesPresent: Boolean = true,
     /** Catalogue could not be read safely; every write is frozen until recovered. */
     val storeHealthy: Boolean = true
+)
+
+data class PluginDetailUi(
+    val plugin: PluginInstallUi,
+    val authorUrl: String,
+    val readme: String,
+    val readmeError: String?
 )
 
 data class MarketSourceUi(
@@ -217,6 +225,24 @@ class PluginRepository(context: Context, private val io: CoroutineDispatcher = D
     }
 
     /** Load warnings for catalogue/trust/source stores; empty when all stores are healthy. */
+    /** Detail view data; README is read on IO and bounded before it reaches Compose. */
+    suspend fun detail(id: String): PluginDetailUi? = withContext(io) {
+        val installed = pluginStore.find(id) ?: return@withContext null
+        val healthy = pluginStore.isHealthy()
+        val manifest = try {
+            PluginManifest.parse(JSONObject(installed.manifestJson))
+        } catch (_: RuntimeException) {
+            null
+        }
+        val readme = readReadme(installed, manifest)
+        PluginDetailUi(
+            plugin = installed.toUi(healthy),
+            authorUrl = manifest?.authorUrl.orEmpty(),
+            readme = readme.first,
+            readmeError = readme.second
+        )
+    }
+
     suspend fun storeWarnings(): List<String> = withContext(io) {
         val warnings = ArrayList<String>()
         addWarning(warnings, pluginStore.loadWarning)
@@ -226,15 +252,6 @@ class PluginRepository(context: Context, private val io: CoroutineDispatcher = D
         if (!trustStore.isHealthy()) addWarning(warnings, "发布者信任记录异常：信任写入已暂停")
         if (!sourceStore.isHealthy()) addWarning(warnings, "市场来源记录异常：来源写入已暂停")
         warnings.distinct()
-    }
-
-    suspend fun setEnabled(id: String, enabled: Boolean): Boolean = withContext(io) {
-        val changed = writes.withLock {
-            val existing = pluginStore.find(id) ?: return@withLock false
-            if (existing.isEnabled() == enabled) true else installer.setEnabled(id, enabled)
-        }
-        if (changed) PluginArtifactPublisher.requestPublish()
-        changed
     }
 
     suspend fun uninstall(id: String): Boolean = withContext(io) {
@@ -559,7 +576,6 @@ class PluginRepository(context: Context, private val io: CoroutineDispatcher = D
         description = description,
         targets = targets,
         features = features,
-        enabled = isEnabled(),
         sourceId = sourceId,
         publisherKeyId = publisherKeyId,
         publisherFingerprint = publisherFingerprint,
@@ -578,6 +594,28 @@ class PluginRepository(context: Context, private val io: CoroutineDispatcher = D
         lastUpdated = lastUpdated,
         lastError = lastError
     )
+
+    private fun readReadme(plugin: InstalledPlugin, manifest: PluginManifest?): Pair<String, String?> {
+        val relative = manifest?.readme.orEmpty()
+        if (relative.isBlank()) return "" to null
+        val versionDirectory = File(
+            File(File(appContext.filesDir, "plugins"), plugin.id),
+            plugin.versionCode.toString()
+        )
+        val readme = File(versionDirectory, "assets/$relative")
+        return try {
+            val root = versionDirectory.canonicalPath + File.separator
+            val path = readme.canonicalPath
+            when {
+                !path.startsWith(root) -> "" to "README 路径无效"
+                !readme.isFile -> "" to "README 文件缺失"
+                readme.length() > PluginConstants.MAX_README_BYTES -> "" to "README 超过大小上限"
+                else -> readme.readBytes().toString(StandardCharsets.UTF_8) to null
+            }
+        } catch (_: IOException) {
+            "" to "README 读取失败"
+        }
+    }
 
     private fun installFilesPresent(plugin: InstalledPlugin): Boolean {
         val versionDirectory = File(

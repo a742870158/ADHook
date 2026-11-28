@@ -33,6 +33,7 @@ public final class PluginManifest {
     private final String authorName;
     private final String authorUrl;
     private final String description;
+    private final String readme;
     private final String entry;
     private final List<PluginTarget> targets;
     private final List<PluginFeature> features;
@@ -43,7 +44,7 @@ public final class PluginManifest {
 
     public PluginManifest(int schema, String id, String name, String version, int versionCode,
                           int abi, int minBaseVersionCode, String authorName, String authorUrl,
-                          String description, String entry, List<PluginTarget> targets,
+                          String description, String readme, String entry, List<PluginTarget> targets,
                           List<PluginFeature> features, Map<String, String> files,
                           String publisherKeyId, String publisherPublicKeyBase64, long publishedAt) {
         this.schema = schema;
@@ -56,6 +57,7 @@ public final class PluginManifest {
         this.authorName = authorName != null ? authorName : "";
         this.authorUrl = authorUrl != null ? authorUrl : "";
         this.description = description != null ? description : "";
+        this.readme = readme != null ? readme : "";
         this.entry = entry;
         this.targets = Collections.unmodifiableList(
                 targets != null ? new ArrayList<>(targets) : new ArrayList<>());
@@ -77,7 +79,7 @@ public final class PluginManifest {
     public static PluginManifest parse(JSONObject json) {
         if (json == null) throw invalid("plugin.json 为空");
         requireOnlyKeys(json, "schema", "id", "name", "version", "versionCode", "abi",
-                "minBaseVersionCode", "authorName", "authorUrl", "description", "entry",
+                "minBaseVersionCode", "authorName", "authorUrl", "description", "readme", "entry",
                 "targets", "features", "files", "publisher");
         int schema = requiredInt(json, "schema", PluginConstants.SCHEMA_VERSION,
                 PluginConstants.SCHEMA_VERSION, "插件 schema 不兼容");
@@ -99,6 +101,10 @@ public final class PluginManifest {
         }
         String description = requiredString(json, "description", 1,
                 PluginConstants.MAX_DESCRIPTION_LENGTH, "插件说明无效");
+        String readme = optionalString(json, "readme", PluginConstants.MAX_README_PATH_LENGTH);
+        if (!readme.isEmpty() && !PluginConstants.isValidReadmePath(readme)) {
+            throw invalid("插件 README 路径无效");
+        }
         String entry = requiredString(json, "entry", 1, PluginConstants.MAX_ENTRY_LENGTH, "入口类名无效");
         if (!PluginConstants.isValidClassName(entry)) throw invalid("入口类名不是合法类名");
 
@@ -139,6 +145,9 @@ public final class PluginManifest {
         }
 
         Map<String, String> files = parseFiles(json.opt("files"));
+        if (!readme.isEmpty() && !files.containsKey("assets/" + readme)) {
+            throw invalid("插件 README 未包含在文件清单中");
+        }
 
         String publisherKeyId = "";
         String publisherPublicKey = "";
@@ -171,7 +180,7 @@ public final class PluginManifest {
         }
 
         return new PluginManifest(schema, id, name, version, versionCode, abi, minBaseVersionCode,
-                authorName, authorUrl, description, entry, targets, features, files,
+                authorName, authorUrl, description, readme, entry, targets, features, files,
                 publisherKeyId, publisherPublicKey, publishedAt);
     }
 
@@ -188,6 +197,7 @@ public final class PluginManifest {
             json.put("authorName", authorName);
             if (!authorUrl.isEmpty()) json.put("authorUrl", authorUrl);
             json.put("description", description);
+            if (!readme.isEmpty()) json.put("readme", readme);
             json.put("entry", entry);
             JSONArray targetArray = new JSONArray();
             for (PluginTarget target : targets) targetArray.put(target.toJson());
@@ -210,6 +220,8 @@ public final class PluginManifest {
         }
         return json;
     }
+
+    public String getReadme() { return readme; }
 
     public List<FeatureMeta> featureMetas() {
         List<FeatureMeta> metas = new ArrayList<>(features.size());
@@ -328,7 +340,7 @@ public final class PluginManifest {
     /** Detached copy (all nested values are immutable). */
     public PluginManifest copy() {
         return new PluginManifest(schema, id, name, version, versionCode, abi, minBaseVersionCode,
-                authorName, authorUrl, description, entry,
+                authorName, authorUrl, description, readme, entry,
                 new ArrayList<>(targets), new ArrayList<>(features), new LinkedHashMap<>(files),
                 publisherKeyId, publisherPublicKeyBase64, publishedAt);
     }

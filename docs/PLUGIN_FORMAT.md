@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | `plugin.json` | 是 | 插件清单，**原始字节**原样入包（签名哈希的是该字节） |
 | `classes.dex` | 是 | 插件字节码，D8 `--min-api 31` 输出 |
-| `assets/**` | 否 | 插件静态资源，逐文件声明在 `files` |
+| `assets/**` | 否 | 插件静态资源，逐文件声明在 `files`；`assets/README.md` 可选，供控制台插件详情展示 |
 | `META-INF/plugin.sig` | 签名包必需 | 发布者签名信封 |
 
 - 条目名仅 ASCII，匹配 `^[A-Za-z0-9._\-/]+$`；使用 `/` 分隔，禁止目录项、绝对路径、反斜杠、`.`/`..` 段、重复项（含大小写不同）；禁止符号链接与加密条目；压缩方法只接受 stored/deflated。
@@ -33,6 +33,7 @@
   "authorName": "社区维护者",
   "authorUrl": "https://example.com/maintainer",
   "description": "小红书去广告与体验增强插件",
+  "readme": "README.md",
   "entry": "com.adhook.hook.com.xingin.xhs.XhsHook",
   "targets": [
     {"packageName": "com.xingin.xhs", "label": "小红书", "primary": "com.xingin.xhs", "processes": []}
@@ -41,6 +42,7 @@
     {"id": "xhs_watermark_blocker", "name": "原生图片保存去水印", "description": "…", "defaultEnabled": true, "implemented": true}
   ],
   "files": {
+    "assets/README.md": "<sha256 hex>",
     "assets/config.json": "<sha256 hex>",
     "classes.dex": "<sha256 hex>"
   },
@@ -66,6 +68,7 @@
 | `authorName` | 1–128 字符，必填 |
 | `authorUrl` | 可选；必须是 http/https、无凭据 URL |
 | `description` | 1–4096 字符 |
+| `readme` | 可选；相对 `assets/` 的 Markdown 路径，1–128 字符，须以 `.md`/`.markdown` 结尾，且对应 `assets/<readme>` 必须在 `files` 中声明；控制台插件详情读取并渲染，大小上限 512 KiB |
 | `entry` | Java 二进制类名，`getFeatures()` 反射入口 |
 | `targets` | 1–16 项；`packageName` 为合法 Android 包名且**禁止** `android`、`com.android.systemui`、`com.adhook`；`label` 0–64；`primary` 可空、非空时须为合法包名；`processes` 0–16 个合法进程名（包名或 `包名:进程`，空数组表示所有进程） |
 | `features` | 0–64 项；`id` 必须满足 `ConfigInputPolicy.isFeatureId`（`[A-Za-z0-9._-]{1,128}`）且唯一；`name` 1–128；`description` 0–2048；`defaultEnabled`/`implemented` 为布尔 |
@@ -74,7 +77,11 @@
 
 未签名包（缺 `META-INF/plugin.sig`）只允许开发者模式显式放行；`publisher` 即使存在也视为未签名。空白字符串的 `publisher` 字段按缺失处理。
 
+底座当前统一以“功能规则默认关闭”初始化；`defaultEnabled` 字段继续解析并保留格式/ABI 兼容，但不再作为宿主默认开启依据。
+
 ABI 2 的宿主运行时只发布 `classes.dex` 与路由快照；`assets/**` 会随插件安装保存在模块私有目录，但不会自动发布到宿主进程。插件入口不得依赖读取 zip/assets 中的资源；需要随包数据时应在构建期嵌入 dex 或等后续 ABI 增加资源发布契约。
+
+`readme` 只用于控制台展示，不进入宿主进程：底座从安装目录读取 `assets/<readme>`，按纯 Markdown 渲染，不执行 HTML、不自动下载远程图片。旧插件没有该字段时仍可安装与运行，详情页显示“未提供 README”。打包工具把 `plugin.properties` 的 `readme=<源文件>` 统一入包为 `assets/README.md`，因此一仓多包时每个插件的 `README.md` 必须放在各自 `plugins/<目录>/` 下。
 
 ## 3. features 反射契约
 
@@ -138,10 +145,10 @@ classes.dex <64 hex>
 
 ## 7. 与底座运行时 / remote 快照的关系（仅描述）
 
-- 底座安装器把已启用插件的 `classes.dex` 以确定性文件名写入框架 **remote files**，并把路由快照（下一条，不含原始 manifest/签名/公钥）写入独立 **remote preferences** 组 `adhook_plugins_v1`；宿主进程每进程最多读取一次，按体积预算加载，任何加载/哈希/ABI/entry 失败都 fail-open，不阻断底座通用 Hook。
+- 底座安装器把所有已安装插件的 `classes.dex` 以确定性文件名写入框架 **remote files**，并把路由快照（下一条，不含原始 manifest/签名/公钥）写入独立 **remote preferences** 组 `adhook_plugins_v1`；宿主进程每进程最多读取一次，按体积预算加载，任何加载/哈希/ABI/entry 失败都 fail-open，不阻断底座通用 Hook。
 - 底座运行时自行生成快照 JSON（本工具不生成）：`{"schema":1,"abi":2,"generation":<long>,"updated_at":0,"packages":{"<pkg>":[{"id","name","versionCode","entry","dex","sha256","abi","minBaseVersionCode","primary","processes":[],"features":[{"id","name","description","defaultEnabled","implemented"}]}]}}`。其中 `dex` 文件名固定为 `p_<sha256(id + 十进制 versionCode) 前 16 hex>_<dexSha256 前 8 hex>.dex`；`primary`/`processes` 来自该包对应的 `targets` 项。
-- 安装/启用插件不等于 LSPosed 作用域勾选、不等于宿主授权、不等于打开 Hook 开关；作用域与开关仍由用户显式操作。
-- 发布顺序固定：先写 dex 并校验大小/哈希，再提交 remote prefs，最后清理旧文件；任一步失败保留旧发布。卸载不删除用户规则；禁用/卸载对已运行宿主只在下次进程启动生效。
+- 插件安装即默认启用，但不等于 LSPosed 作用域勾选，也不等于插件功能规则开启；插件功能默认关闭，需在应用详情逐个开启，作用域仍由用户在 LSPosed 中操作。
+- 发布顺序固定：先写 dex 并校验大小/哈希，再提交 remote prefs，最后清理旧文件；任一步失败保留旧发布。卸载不删除用户规则；更新/卸载对已运行宿主只在下次进程启动生效。
 
 ## 8. 版本演进
 

@@ -1,92 +1,36 @@
 package com.adhook.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.adhook.plugin.PluginArtifactPublisher
+import androidx.compose.ui.unit.sp
 import com.adhook.ui.components.*
 import com.adhook.ui.data.*
 
 /**
- * 单个已安装插件的详情。功能开关在对应目标应用详情页调整；此处提供启停、更新、卸载与
- * 遗忘发布者。所有危险操作都需要二次确认，且不会删除用户规则。
+ * 已安装插件详情：功能清单、作者/来源/目标与插件自带的 Markdown README。
+ * 插件启停已移除，插件安装即默认启用；功能规则仍在应用详情逐个开启。
  */
 @Composable
-fun PluginDetailScreen(
+fun PluginDetailPage(
     modifier: Modifier = Modifier,
-    plugin: PluginInstallUi,
-    sourceLabel: String,
-    update: MarketEntryUi?,
-    latestEntry: MarketEntryUi?,
-    publicationState: PluginArtifactPublisher.State?,
-    busy: Boolean,
-    onBack: () -> Unit,
-    onSetEnabled: (Boolean) -> Unit,
-    onUpdate: (MarketEntryUi) -> Unit,
-    onUninstall: () -> Unit,
-    onForgetPublisher: () -> Unit
+    detail: PluginDetailUi?,
+    sources: List<MarketSourceUi>,
+    loading: Boolean,
+    error: String?,
+    onBack: () -> Unit
 ) {
-    var showUninstallConfirm by remember(plugin.id) { mutableStateOf(false) }
-    var showForgetConfirm by remember(plugin.id) { mutableStateOf(false) }
-
-    if (showUninstallConfirm) {
-        AlertDialog(
-            onDismissRequest = { showUninstallConfirm = false },
-            title = { Text("卸载插件") },
-            text = {
-                Text(
-                    "确定卸载「${plugin.name}」吗？已保存的用户规则、订阅与授权不会被删除；" +
-                        "已运行的目标应用需强退重开才会停止加载该插件。"
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !busy,
-                    onClick = {
-                        showUninstallConfirm = false
-                        onUninstall()
-                    }
-                ) { Text("卸载", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showUninstallConfirm = false }) { Text("取消") }
-            }
-        )
-    }
-    if (showForgetConfirm) {
-        AlertDialog(
-            onDismissRequest = { showForgetConfirm = false },
-            title = { Text("遗忘发布者") },
-            text = {
-                Text(
-                    "将删除「${plugin.name}」已固定的发布者信任记录。下次安装同一插件会重新要求确认发布者指纹，" +
-                        "当前已安装版本不受影响。"
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !busy,
-                    onClick = {
-                        showForgetConfirm = false
-                        onForgetPublisher()
-                    }
-                ) { Text("遗忘", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showForgetConfirm = false }) { Text("取消") }
-            }
-        )
-    }
-
     Column(modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
@@ -96,254 +40,144 @@ fun PluginDetailScreen(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
             }
             Column(Modifier.weight(1f)) {
-                Text(
-                    plugin.name,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    "v${plugin.version} · ${plugin.id}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Text("插件详情",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                detail?.let {
+                    Text(it.plugin.name,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
-        LazyColumn(
-            modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            item {
-                AdCard {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        AdIconBox(icon = Icons.Default.Extension)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("插件状态", style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                when {
-                                    !plugin.storeHealthy -> "安装记录异常，写入已暂停"
-                                    !plugin.filesPresent -> "插件文件缺失，请重新安装"
-                                    plugin.enabled -> "已启用 · 目标应用需强退重开后才读取新状态"
-                                    else -> "已停用 · 启用后需强退目标应用"
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+        when {
+            loading && detail == null -> Box(
+                Modifier.fillMaxWidth().weight(1f),
+                contentAlignment = Alignment.Center
+            ) { CircularProgressIndicator() }
+            error != null -> Column(
+                Modifier.fillMaxWidth().weight(1f).padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(error, style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = onBack) { Text("返回插件列表") }
+            }
+            detail == null -> Box(
+                Modifier.fillMaxWidth().weight(1f),
+                contentAlignment = Alignment.Center
+            ) { Text("插件安装记录不存在或已卸载", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            else -> PluginDetailContent(detail, sources)
+        }
+    }
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.ColumnScope.PluginDetailContent(
+    detail: PluginDetailUi,
+    sources: List<MarketSourceUi>
+) {
+    val plugin = detail.plugin
+    val uriHandler = LocalUriHandler.current
+    val sourceLabel = pluginSourceLabel(plugin, sources)
+    LazyColumn(
+        modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            AdCard {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    AdIconBox(icon = Icons.Default.Extension)
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(plugin.name,
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false))
+                            Spacer(Modifier.width(6.dp))
+                            AdBadge(text = "v${plugin.version}",
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                textColor = MaterialTheme.colorScheme.primary)
                         }
-                        Switch(
-                            checked = plugin.enabled,
-                            onCheckedChange = onSetEnabled,
-                            enabled = !busy && plugin.storeHealthy
+                        Text(
+                            if (detail.authorUrl.isNotBlank()) "作者 ${plugin.author} · 点击访问主页"
+                            else "作者 ${plugin.author}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (detail.authorUrl.isNotBlank()) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = if (detail.authorUrl.isNotBlank()) Modifier.clickable {
+                                try { uriHandler.openUri(detail.authorUrl) } catch (_: Throwable) { }
+                            } else Modifier
                         )
-                    }
-                    if (plugin.author.isNotBlank()) {
-                        Spacer(Modifier.height(8.dp))
-                        Text("作者：${plugin.author}", style = MaterialTheme.typography.bodySmall)
-                    }
-                    if (plugin.description.isNotBlank()) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(plugin.description, style = MaterialTheme.typography.bodySmall,
+                        Text("来源 $sourceLabel", style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Spacer(Modifier.height(8.dp))
-                    Text("来源：$sourceLabel", style = MaterialTheme.typography.bodySmall,
+                }
+                Spacer(Modifier.height(8.dp))
+                if (plugin.description.isNotBlank()) {
+                    Text(plugin.description, style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(
-                        "安装时间：${formatPluginTimestamp(plugin.installedAt).ifBlank { "未知" }}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        "ABI ${plugin.abi} · 最低底座 versionCode ${plugin.minBaseVersionCode}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            item {
-                AdSectionHeader(title = "发布者")
-            }
-            item {
-                AdCard {
-                    if (plugin.publisherFingerprint.isBlank()) {
-                        Text("未签名插件 · 无法验证发布者身份",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error)
-                    } else {
-                        Text("完整指纹（SHA-256 公钥）", style = MaterialTheme.typography.labelMedium)
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            plugin.publisherFingerprint,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        if (plugin.publisherKeyId.isNotBlank()) {
-                            Spacer(Modifier.height(4.dp))
-                            Text("Key ID：${plugin.publisherKeyId}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = { showForgetConfirm = true },
-                        enabled = !busy && plugin.publisherFingerprint.isNotBlank()
-                    ) { Text("遗忘发布者") }
-                }
-            }
-
-            item { AdSectionHeader(title = "目标应用") }
-            item {
-                AdCard {
-                    plugin.targets.forEachIndexed { index, target ->
-                        Text(
-                            target.label.ifBlank { target.packageName },
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Text(target.packageName, style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        if (target.primary.isNotBlank() && target.primary != target.packageName) {
-                            Text("运行标识：${target.primary}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        if (target.processes.isNotEmpty()) {
-                            Text("进程：${target.processes.joinToString("、")}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        if (index < plugin.targets.lastIndex) {
-                            HorizontalDivider(Modifier.padding(vertical = 6.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant)
-                        }
-                    }
-                }
-            }
-
-            item { AdSectionHeader(title = "插件功能", trailingText = "${plugin.features.size} 项") }
-            item {
-                AdCard {
-                    if (plugin.features.isEmpty()) {
-                        Text("该插件未在清单中声明独立功能项。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    } else {
-                        plugin.features.forEachIndexed { index, feature ->
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(feature.name, style = MaterialTheme.typography.bodyMedium)
-                                    if (feature.description.isNotBlank()) {
-                                        Text(feature.description,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                }
-                                Spacer(Modifier.width(8.dp))
-                                AdBadge(
-                                    text = when {
-                                        !feature.isImplemented -> "暂未适配"
-                                        feature.isDefaultEnabled -> "默认开启"
-                                        else -> "默认关闭"
-                                    },
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    textColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            if (index < plugin.features.lastIndex) {
-                                HorizontalDivider(Modifier.padding(vertical = 4.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant)
-                            }
-                        }
-                    }
                     Spacer(Modifier.height(4.dp))
-                    Text("功能开关在对应目标应用详情页调整。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text(
+                    "目标：${plugin.targets.joinToString("、") { it.label.ifBlank { it.packageName } }}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (plugin.publisherFingerprint.isNotBlank()) {
+                    Text("发布者 ${plugin.publisherFingerprint}", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-
-            item { AdSectionHeader(title = "更新") }
-            item {
-                AdCard {
-                    when {
-                        update != null -> {
-                            Text("可更新到 v${update.version}",
-                                style = MaterialTheme.typography.titleSmall)
-                            if (update.changelog.isNotBlank()) {
-                                Spacer(Modifier.height(4.dp))
-                                Text(update.changelog, style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            Button(onClick = { onUpdate(update) }, enabled = !busy) {
-                                Text("更新到 v${update.version}")
-                            }
-                        }
-                        latestEntry != null -> Text(
-                            if (!latestEntry.compatible) {
-                                "市场索引中的 v${latestEntry.version} 与当前底座不兼容，无法更新。"
-                            } else {
-                                "已是最新版本（市场索引 v${latestEntry.version}）。"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        else -> Text(
-                            "暂无市场索引信息。可在市场页刷新后检查更新，或卸载后重新导入本地 zip。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
-            item { AdSectionHeader(title = "发布状态") }
-            item {
-                AdCard {
-                    val state = publicationState
-                    if (state == null) {
-                        Text("等待插件路由发布状态…",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    } else {
-                        val failed = !state.isConfirmed
-                        Text(
-                            when {
-                                !state.serviceAvailable ->
-                                    "未检测到可用的 LSPosed 服务：插件需在 LSPosed 中启用模块并勾选目标应用作用域。"
-                                state.isConfirmed -> "插件路由已发布（generation ${state.publishedGeneration}）。"
-                                else -> "发布待确认：${state.error ?: "PENDING"}；已运行的目标应用需强退重开。"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (failed) MaterialTheme.colorScheme.error
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
-            item { AdSectionHeader(title = "危险操作") }
-            item {
-                AdCard {
-                    Text("卸载插件", style = MaterialTheme.typography.titleSmall)
-                    Text("保留用户规则与订阅；已运行的目标应用需强退重开。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = { showUninstallConfirm = true },
-                        enabled = !busy,
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
-                    ) { Text("卸载插件") }
-                }
-            }
-            item { Spacer(Modifier.height(32.dp)) }
         }
+
+        item {
+            AdSectionHeader(
+                title = "功能",
+                trailingText = if (plugin.features.isEmpty()) null else "${plugin.features.size} 项"
+            )
+        }
+        if (plugin.features.isEmpty()) {
+            item {
+                AdCard {
+                    Text("该插件未声明独立功能项；插件加载后按通用 Hook、拾取规则与订阅规则运行。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        } else {
+            items(plugin.features.size, key = { "detail-feature-${plugin.features[it].id}" }) { index ->
+                val feature = plugin.features[index]
+                AdCard {
+                    Text(feature.name, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
+                    if (feature.description.isNotBlank()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(feature.description, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+
+        item {
+            AdSectionHeader(title = "插件说明")
+        }
+        item {
+            AdCard {
+                when {
+                    detail.readmeError != null -> Text(detail.readmeError,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error)
+                    detail.readme.isBlank() -> Text("该插件未提供 Markdown README。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    else -> MarkdownText(detail.readme, Modifier.fillMaxWidth())
+                }
+            }
+        }
+        item { Spacer(Modifier.height(32.dp)) }
     }
 }

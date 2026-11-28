@@ -700,6 +700,7 @@ authorName=测试作者
 authorUrl=https://example.com/author
 minBaseVersionCode=30000000
 assets=assets/config.json
+readme=README.md
 """
 
 
@@ -824,6 +825,8 @@ class EndToEndTests(unittest.TestCase):
         (source / "demo" / "DemoPlugin.java").write_text(PLUGIN_SOURCE, encoding="utf-8")
         (source / "assets").mkdir()
         (source / "assets" / "config.json").write_text('{"hello":"asset"}\n', encoding="utf-8")
+        (root / "plugin" / "README.md").write_text(
+            "# 演示插件\n\n这是插件自带的 README。\n", encoding="utf-8", newline="\n")
         cls.properties = root / "plugin" / "plugin.properties"
         cls.properties.write_text(PLUGIN_PROPERTIES, encoding="utf-8")
 
@@ -880,12 +883,17 @@ class EndToEndTests(unittest.TestCase):
                          [feature["id"] for feature in manifest["features"]])
         self.assertTrue(manifest["features"][0]["defaultEnabled"])
         self.assertFalse(manifest["features"][1]["defaultEnabled"])
-        self.assertEqual({"classes.dex", "assets/config.json"}, set(manifest["files"]))
+        self.assertEqual({"classes.dex", "assets/config.json", "assets/README.md"},
+                         set(manifest["files"]))
+        self.assertEqual("README.md", manifest["readme"])
         self.assertEqual(1_700_000_000_000, manifest["publisher"]["publishedAt"])
         self.assertEqual(self.build.sha256, archive.zip_sha256)
         with zipfile.ZipFile(self.build.zip_path) as zip_archive:
-            self.assertEqual({"plugin.json", "classes.dex", "assets/config.json", "META-INF/plugin.sig"},
+            self.assertEqual({"plugin.json", "classes.dex", "assets/config.json",
+                              "assets/README.md", "META-INF/plugin.sig"},
                              set(zip_archive.namelist()))
+            self.assertEqual("# 演示插件\n\n这是插件自带的 README。\n".encode("utf-8"),
+                             zip_archive.read("assets/README.md"))
         metadata = json.loads(self.build.metadata_path.read_text(encoding="utf-8"))
         self.assertEqual(self.build.zip_path.name, metadata["file"])
         self.assertEqual(self.build.sha256, metadata["release"]["sha256"])

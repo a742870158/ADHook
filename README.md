@@ -6,17 +6,17 @@
 
 基于现代 LSPosed / LibXposed API101 的 Android 广告拦截与规则管理底座，提供 SDK 断源、声明式折叠、可视化拾取、插件运行时与插件市场。
 
-> ADHook 是**独立底座**：只维护通用 Hook、规则引擎、拾取器、插件运行时/市场和配置安全。宿主深度适配不进入本仓库，由独立维护的签名插件提供；安装插件不等于授权宿主或开启 Hook，两者仍由用户在应用详情页显式确认。当前源码为 API101-only，最低 Android 12。
+> ADHook 是**独立底座**：只维护通用 Hook、规则引擎、拾取器、插件运行时/市场和配置安全。宿主深度适配不进入本仓库，由独立维护的签名插件提供。LSPosed 作用域内 Hook 默认执行；插件安装即默认启用，但插件功能规则默认关闭，需在应用详情逐个手动开启。当前源码为 API101-only，最低 Android 12。
 
 ## 主要能力
 
-- **规则中心**：Kotlin、Jetpack Compose、Material 3；全局规则、应用规则、插件、关于四个入口；支持应用搜索、深浅色模式与按应用特性开关。
-- **通用托管**：用户在 LSPosed 作用域中勾选应用后，可挂载通用 SDK 拦截、规则引擎与拾取器；未授权的宿主不能经 Provider 保存规则或上报状态。
+- **规则中心**：Kotlin、Jetpack Compose、Material 3；全局、规则、应用、插件、关于五个入口；支持应用搜索、深浅色模式与按应用特性开关。
+- **通用托管**：用户在 LSPosed 作用域中勾选应用后，默认挂载通用 SDK 拦截、规则引擎与拾取器；宿主数据按调用者自有包默认授权，不能访问其它包。
 - **签名插件**：宿主深度适配以签名 zip 安装；插件清单声明 `targets`/`features`，底座校验 ABI、dex sha256、发布者签名与最小底座版本。插件由独立仓库或市场镜像分发，本仓库不内置任何宿主 Hook。
 - **插件市场**：支持添加任意 HTTPS 镜像地址；安装/更新前校验索引 sha256 与 ECDSA P-256 发布者签名，首次信任展示完整指纹，发布者密钥变化阻断更新。
 - **可视化拾取**：宿主内悬浮球、红框选择、父子层级切换、折叠预览、资源/文本/类名规则保存，以及运行时线索导出。
 - **规则来源独立**：本地 picker 与远程订阅分开管理；总开关不覆写逐条偏好，远程规则按显式身份同步新增、修改、撤回和停用。
-- **备份与导入导出**：本地规则可经系统文件选择器导入，导出到公共下载目录或应用私有目录；全量备份包含配置、订阅与逐条偏好，恢复先验证并保留恢复前快照，私有宿主授权不随备份导入。
+- **备份与导入导出**：本地规则可经系统文件选择器导入，导出到公共下载目录或应用私有目录；全量备份包含配置、订阅与逐条偏好，恢复先验证并保留恢复前快照，授权判定不随备份导入。
 - **版本更新**：仅以官方 GitHub Release 和 SHA-256 启用受管下载；安装器打开不等于安装完成，签名轮换不自动接受。
 - **真实动作统计**：详情区分已拦截、已注册未采集、未上报、挂载异常与旧版记录；注册 Hook 和 CSS 注入不算拦截。
 
@@ -41,15 +41,23 @@ python -m unittest discover -s tools/tests -p 'test_*.py' -v
 
 Windows 使用 `.\gradlew.bat`。
 
-**本仓库不提供本地打包或发布脚本。** 签名 APK 只由 GitHub Actions 在版本 Tag 上构建、验签并发布；本地构建只用于验证。发布流程与必需 Secrets 见[工程验证与安全发布](docs/QUALITY_AND_RELEASE.md#构建与发布)。
+**本地正式签名构建**：在仓库根创建未跟踪的 `signing.properties`（或使用同名环境变量），提供 `storeFile`、`storePassword`、`keyAlias`、`keyPassword`、`certificateSha256`，然后执行：
+
+```bash
+./gradlew :app:assembleRelease :app:verifyPluginAbiMapping --console=plain
+python tools/verify_apk_signature.py --apk app/build/outputs/apk/release/app-release.apk --expected-sha256 <指纹>
+adb install -r app/build/outputs/apk/release/app-release.apk
+```
+
+本地构建必须复用既有正式证书；缺少签名材料时 `assembleRelease` 直接失败，不会回退 debug 证书。正式发布仍只由 GitHub Actions 在版本 Tag 上执行，流程与 Secrets 见[工程验证与安全发布](docs/QUALITY_AND_RELEASE.md#构建与发布)。
 
 ## 安装
 
-1. 从 [Releases](https://github.com/a742870158/ADHook/releases) 下载 APK 并安装。
+1. 从 [Releases](https://github.com/a742870158/ADHook/releases) 下载 APK，或使用本地正式签名构建覆盖安装。
 2. 在 LSPosed 管理器中启用 ADHook，并勾选目标宿主作用域。
-3. 安装宿主插件（本地 zip 或市场镜像）；插件只发布路由与 dex，不自动授权宿主、不自动打开 Hook。
-4. 在应用详情显式授权宿主并打开 Hook 开关；强退并重开宿主，确认插件加载与目标功能。
-5. 缺少注入或插件日志时，先检查作用域、插件启停、ABI/底座版本和框架 remote files 支持，不反复盲目探测。
+3. 安装宿主插件（本地 zip 或市场镜像）；插件安装后默认启用，其功能规则默认关闭。
+4. 在应用详情逐个打开需要的插件功能规则；强退并重开宿主，确认插件加载与目标功能。
+5. 缺少注入或插件日志时，先检查作用域、插件文件/ABI/底座版本和框架 remote files 支持，不反复盲目探测。
 
 编译成功、注册 `OK` 或计数增加都不是广告效果证据。
 

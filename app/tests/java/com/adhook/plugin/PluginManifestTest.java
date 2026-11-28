@@ -52,6 +52,28 @@ public class PluginManifestTest {
         assertEquals(manifest.getPublishedAt(), reparsed.getPublishedAt());
     }
 
+    @Test public void acceptsOptionalReadmeOnlyWhenTheAssetIsDeclared() throws Exception {
+        JSONObject json = validManifest();
+        json.put("readme", "README.md");
+        JSONObject files = json.getJSONObject("files");
+        files.put("assets/README.md", "c".repeat(64));
+        PluginManifest manifest = PluginManifest.parse(json);
+        assertEquals("README.md", manifest.getReadme());
+        assertEquals("README.md", PluginManifest.parse(manifest.toJson()).getReadme());
+
+        JSONObject missingAsset = validManifest();
+        missingAsset.put("readme", "README.md");
+        assertThrows(IllegalArgumentException.class, () -> PluginManifest.parse(missingAsset));
+
+        for (String bad : new String[]{"../README.md", "/README.md", "assets/README.md",
+                "README.txt", "README.md/evil"}) {
+            JSONObject invalid = validManifest();
+            invalid.put("readme", bad);
+            assertThrows("expected readme rejection for " + bad,
+                    IllegalArgumentException.class, () -> PluginManifest.parse(invalid));
+        }
+    }
+
     @Test public void rejectsMalformedPluginIds() throws Exception {
         for (String id : new String[]{"ab", "Abc", "-abc", "a b c", "abc/def", "", "a"
                 + "x".repeat(64)}) {

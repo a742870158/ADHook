@@ -107,7 +107,7 @@ public final class PluginRuntimeTable {
         Map<String, Set<String>> seen = new LinkedHashMap<>();
         if (plugins != null) {
             for (InstalledPlugin plugin : plugins) {
-                if (plugin == null || !plugin.isEnabled()) continue;
+                if (plugin == null) continue;
                 if (!PluginConstants.isValidPluginId(plugin.getId())
                         || !PluginConstants.isValidClassName(plugin.getEntry())) {
                     AdHookLog.w("[PluginRuntimeTable] Skip plugin with invalid identity: " + plugin.getId());

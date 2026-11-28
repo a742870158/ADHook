@@ -41,12 +41,14 @@ authorName=社区维护者
 authorUrl=https://example.com/maintainer
 minBaseVersionCode=30000000
 assets=assets/config.json;assets/rules
+readme=README.md
 summary=市场列表摘要（缺省取 description 前 200 字符）
 changelog=本版本变更说明（进入市场索引）
 ```
 
 - `targets` 分号分隔多个目标，`packageName:label:primary` 冒号分隔，`label`/`primary` 可空；禁止 `android`、`com.android.systemui`、`com.adhook`；上限 16 项。
 - `assets` 分号分隔，路径相对 `--source` 源目录：文件条目入包为 `assets/<文件名>`，目录条目入包为 `assets/<相对路径>`；禁止 `..`、绝对路径、符号链接，单文件 ≤4 MiB。
+- `readme` 可选，路径相对插件目录（如 `README.md`），必须是 UTF-8 Markdown；构建时统一入包为 `assets/README.md`，清单生成 `"readme": "README.md"`。控制台插件详情会展示它，最多 512 KiB；一仓多包时每个插件目录各放一份自己的 README，不要共用仓库根 README。
 - 生成的 `plugin.json` 使用 camelCase 权威字段（`authorName`/`authorUrl`、`targets[].packageName`、`features[].defaultEnabled`、`files` 对象、`publisher.publishedAt`），不要手写清单。
 
 ## 3. 命令
@@ -120,6 +122,7 @@ URL 仍是占位（`example.com`、`<...>`、`SET-ME`、`TODO` 或空值）时�
   scripts/check-plugins.py     # 离线预检：id/宿主包全仓唯一、入口类存在
   plugins/<plugin-id>/
     plugin.properties
+    README.md                  # 可选但推荐；控制台插件详情展示
     src/**/*.java
     src/assets/**              # 可选
   tests/java/**  tests/libs/**  # 可选
@@ -175,7 +178,7 @@ python -B -m unittest discover -s tools/tests -p 'test_plugin_package.py' -v
 - **SDK**：`adhook-plugin-api-<abi>.jar` + 底座 Release 中的同名 `.sha256`；需要测试类时使用稳定别名 `adhook-test-classes.jar` 或版本化 `adhook-test-classes-<version>.jar`。不要自行编译底座冒充 SDK。
 - **发布者身份**：一个插件项目多款插件共用一份发布者密钥（用户只需信任一个发布者）；插件之间不能互相 import，共享逻辑只能复制或上收成底座 ABI。
 - **商店只收签名包**：`index` 会验 ECDSA P-256 签名并核对 zip 内清单与元数据；未签名包只能在开发者模式本地导入。
-- **与运行时的边界**：安装不等于作用域勾选、宿主授权或开关打开；ABI 破坏性变更必须提升 `PLUGIN_ABI`。
+- **与运行时的边界**：安装即默认启用，但不等于作用域勾选；插件功能规则默认关闭，需在应用详情逐个开启。ABI 破坏性变更必须提升 `PLUGIN_ABI`。
 
 **SDK 分发**：`adhook-plugin-api-<abi>.jar` 与 `adhook-test-classes.jar` / `adhook-test-classes-<version>.jar` 由 Release 工作流随 APK 一起上传为 Release 资产，并为每个 jar 生成同名 `.sha256`；插件项目可引用 `releases/latest/download/adhook-test-classes.jar` 稳定别名，或 `releases/download/<tag>/...` 固定版本，本地构建用下载后的副本 + sha256 校验。
 
@@ -186,8 +189,8 @@ python -B -m unittest discover -s tools/tests -p 'test_plugin_package.py' -v
 1. 确认目标设备已安装并启用 ADHook、LSPosed 版本支持 API101 且暴露 remote files/preferences 能力（console 插件页会显示服务状态；模块日志应出现 `PluginBootstrap` 相关诊断而不是静默跳过）。
 2. 用本地测试发布者密钥构建一个试点插件（`build --sign` + `verify`），在 ADHook 插件页“本地导入”安装；首次信任需展示完整发布者指纹。
 3. 强退并重开目标宿主，确认：模块日志出现 remote dex 发布成功、`PluginBootstrap` 匹配到插件、插件 entry 加载；底座通用拾取器/规则仍工作。
-4. 打开对应 Hook 开关并复测一个已有深度特性；同时确认关闭开关时原方法放行（不能用注册日志冒充命中）。
-5. 禁用插件 → 强退重开 → 确认不再加载；卸载插件 → 确认 AppConfig/用户规则保留、只删除插件目录。
+4. 在应用详情逐个打开对应插件功能，复测已有深度特性；确认功能关闭时原方法放行（不能用注册日志冒充命中）。
+5. 卸载插件 → 强退重开 → 确认不再加载；再确认 AppConfig/用户规则保留、只删除插件目录。
 6. 负向验证：未签名包在非开发者模式拒绝；篡改 zip 的 dex/签名拒绝；ABI 或 `minBaseVersionCode` 不符拒绝；发布者 key 变化阻断。
 7. 用 release 签名底座 + 按 release plugin-api 资产构建的试点包重复 3–5，验证 R8 后 ABI 链接真实可用（JVM mapping 通过不等于设备链接通过）。
 8. 记录设备型号/Android/LSPosed/底座版本、插件版本/签名指纹、成功与失败日志；真机结果与本地测试分开报告。只有这些证据通过，才能说该宿主插件在设备上可用。

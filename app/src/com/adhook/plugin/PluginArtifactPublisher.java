@@ -215,7 +215,7 @@ public final class PluginArtifactPublisher {
         Map<String, String> dexHashes = new LinkedHashMap<>();
         Map<String, byte[]> dexFiles = new LinkedHashMap<>();
         for (InstalledPlugin plugin : plugins) {
-            if (plugin == null || !plugin.isEnabled()) continue;
+            if (plugin == null) continue;
             byte[] dex;
             try {
                 dex = dexSource.read(plugin);

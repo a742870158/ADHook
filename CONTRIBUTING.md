@@ -26,7 +26,7 @@ python -m unittest discover -s tools/tests -p 'test_*.py' -v
 ./gradlew :app:testDebugUnitTest :app:lintDebug :app:verifyPluginAbiSurface --console=plain
 ```
 
-Windows 使用 `.\gradlew.bat`。本仓库**不提供本地打包/发布脚本**：签名 APK 只由 GitHub Actions 在版本 Tag 上构建和发布，详见 [发布流程](docs/QUALITY_AND_RELEASE.md#构建与发布)。
+Windows 使用 `.\gradlew.bat`。本地可以用**既有正式证书**构建并安装到设备验证：把 `storeFile`、`storePassword`、`keyAlias`、`keyPassword`、`certificateSha256` 放进未跟踪的 `signing.properties`（或环境变量），执行 `:app:assembleRelease` 与 `:app:verifyPluginAbiMapping`，再按[工程验证与安全发布](docs/QUALITY_AND_RELEASE.md#本地正式签名构建与设备验证)验签/安装。正式发布仍只由 GitHub Actions 在版本 Tag 上执行；不提交签名材料或本地 APK。
 
 ## 插件 ABI
 

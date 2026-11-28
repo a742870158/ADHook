@@ -13,18 +13,18 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 /**
  * Plugin metadata portion of the configuration backup.
  *
- * <p>Only market sources and the installed plugin identities/enable flags travel with a backup.
- * Plugin binaries, publisher trust pins (TOFU) and host authorization grants are deliberately
- * excluded: restoring a backup must never install code, trust a publisher or authorize a host.
+ * <p>Only market sources and the installed plugin identities travel with a backup. Installed
+ * plugins are always enabled now; the legacy {@code enabled} field is kept in the envelope for
+ * older readers but is ignored on restore. Plugin binaries, publisher trust pins (TOFU) and host
+ * authorization are deliberately excluded: restoring a backup must never install code, trust a
+ * publisher or authorize a host.
  * A plugin listed in the backup but absent on this device is reported as "needs reinstall" and is
  * never downloaded automatically.</p>
  *
@@ -72,7 +72,8 @@ public final class PluginBackupCodec {
                             .put("id", plugin.getId())
                             .put("name", plugin.getName())
                             .put("versionCode", plugin.getVersionCode())
-                            .put("enabled", plugin.isEnabled()));
+                            // Compatibility field; installed plugins are always enabled.
+                            .put("enabled", true));
                 }
             }
             block.put("schema", SCHEMA_VERSION);
@@ -174,8 +175,6 @@ public final class PluginBackupCodec {
             return outcome;
         }
         List<PluginMarketSource> previousSources = sourceStore.list();
-        Map<String, Boolean> previousEnabled = new LinkedHashMap<>();
-        for (InstalledPlugin plugin : store.list()) previousEnabled.put(plugin.getId(), plugin.isEnabled());
         List<Long> addedSourceIds = new ArrayList<>();
         try {
             JSONArray sources = block.optJSONArray("sources");
@@ -213,11 +212,10 @@ public final class PluginBackupCodec {
                 JSONObject raw = installed.optJSONObject(i);
                 String id;
                 int versionCode;
-                boolean enabled;
                 try {
                     id = raw.getString("id");
                     versionCode = raw.getInt("versionCode");
-                    enabled = raw.getBoolean("enabled");
+                    // Legacy enabled=false is deliberately ignored; installed plugins are enabled.
                 } catch (org.json.JSONException malformed) {
                     throw new IllegalStateException("插件元数据字段缺失", malformed);
                 }
@@ -231,13 +229,11 @@ public final class PluginBackupCodec {
                     outcome.warnings.add("插件 " + id + " 本机版本为 " + current.getVersionCode()
                             + "，备份为 " + versionCode + "；保留本机已安装版本");
                 }
-                if (!store.setEnabled(id, enabled)) throw new IllegalStateException("插件状态写入失败");
                 outcome.restoredInstalled++;
             }
             return outcome;
         } catch (RuntimeException failure) {
             rollbackSources(sourceStore, previousSources, addedSourceIds);
-            rollbackInstalled(store, previousEnabled);
             throw new IllegalStateException("插件元数据恢复失败，已尽力回滚插件状态", failure);
         }
     }
@@ -256,14 +252,4 @@ public final class PluginBackupCodec {
         }
     }
 
-    private static void rollbackInstalled(PluginStore store, Map<String, Boolean> previous) {
-        for (Map.Entry<String, Boolean> entry : previous.entrySet()) {
-            try {
-                InstalledPlugin current = store.find(entry.getKey());
-                if (current != null && current.isEnabled() != entry.getValue()) {
-                    store.setEnabled(entry.getKey(), entry.getValue());
-                }
-            } catch (RuntimeException ignored) { }
-        }
-    }
 }

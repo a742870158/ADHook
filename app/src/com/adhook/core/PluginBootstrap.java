@@ -252,8 +252,9 @@ public final class PluginBootstrap {
         List<FeatureMeta> result = new ArrayList<>(features.size());
         for (PluginFeature feature : features) {
             if (feature == null) continue;
+            // Host defaults are always off; only an explicit per-feature preference enables it.
             result.add(new FeatureMeta(feature.getId(), feature.getName(), feature.getDescription(),
-                    feature.isDefaultEnabled(), feature.isImplemented()));
+                    false, feature.isImplemented()));
         }
         return result;
     }

@@ -69,16 +69,16 @@ class PluginBackupPolicyTest {
         }
     }
 
-    private fun installed(id: String, versionCode: Int, enabled: Boolean): InstalledPlugin =
+    private fun installed(id: String, versionCode: Int): InstalledPlugin =
         InstalledPlugin(id, "测试插件", "1.0.0", versionCode, 1, 1,
             "com.adhook.plugin.sample.SampleHook", "作者", "描述", emptyList(), emptyList(),
-            "", enabled, System.currentTimeMillis(), "0011223344556677", "fingerprint",
+            "", System.currentTimeMillis(), "0011223344556677", "fingerprint",
             "a".repeat(64), "b".repeat(64), "{}")
 
     @Test fun backupCarriesSourcesAndInstalledIdentityOnly() {
         PluginSourceStore.get(context).upsert(
             PluginMarketSource(7L, "社区镜像", "https://example.com/plugins/index.json", true, 0L, ""))
-        assertTrue(PluginStore.get(context).upsert(installed("com.adhook.plugin.alpha", 12, true)))
+        assertTrue(PluginStore.get(context).upsert(installed("com.adhook.plugin.alpha", 12)))
 
         val root = JSONObject(BackupManager.createBackupJson(context))
         assertEquals(3, root.getInt("schema"))
@@ -101,7 +101,7 @@ class PluginBackupPolicyTest {
     @Test fun restoreAddsSourcesButNeverInstallsMissingPlugins() {
         val source = PluginSourceStore.get(context)
         source.upsert(PluginMarketSource(7L, "社区镜像", "https://example.com/plugins/index.json", true, 0L, ""))
-        PluginStore.get(context).upsert(installed("com.adhook.plugin.alpha", 12, true))
+        PluginStore.get(context).upsert(installed("com.adhook.plugin.alpha", 12))
         val backup = BackupManager.createBackupJson(context)
 
         // Simulate a different device: new files directory, no installed plugin binaries.
@@ -116,16 +116,15 @@ class PluginBackupPolicyTest {
         assertEquals(0, PluginStore.get(other).count())
     }
 
-    @Test fun restoreAppliesEnableFlagForLocallyInstalledPlugin() {
-        PluginStore.get(context).upsert(installed("com.adhook.plugin.alpha", 12, true))
+    @Test fun restoreIgnoresLegacyEnableFlagForLocallyInstalledPlugin() {
+        PluginStore.get(context).upsert(installed("com.adhook.plugin.alpha", 12))
         val backup = JSONObject(BackupManager.createBackupJson(context))
         backup.getJSONObject("plugins").getJSONArray("installed")
             .getJSONObject(0).put("enabled", false)
-        assertTrue(PluginStore.get(context).setEnabled("com.adhook.plugin.alpha", true))
 
         val restored = BackupManager.restore(context, backup.toString()).getOrThrow()
         assertEquals(1, restored.installedPluginCount)
-        assertFalse(PluginStore.get(context).find("com.adhook.plugin.alpha")!!.isEnabled)
+        assertNotNull(PluginStore.get(context).find("com.adhook.plugin.alpha"))
     }
 
     @Test fun invalidPluginMetadataRejectsWholeBackupBeforeRestore() {

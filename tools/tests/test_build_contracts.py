@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class BuildSourceContractTests(unittest.TestCase):
-    def test_github_actions_is_the_only_packaging_and_publish_path(self):
+    def test_github_actions_remains_the_only_publish_path(self):
         gradle = (ROOT / "app/build.gradle.kts").read_text(encoding="utf-8-sig")
         workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8-sig")
         self.assertNotIn("finalizedBy", gradle)
@@ -28,15 +28,19 @@ class BuildSourceContractTests(unittest.TestCase):
             with self.subTest(local=local):
                 self.assertFalse((ROOT / local).exists())
 
-    def test_release_signing_comes_from_environment_not_a_committed_file(self):
+    def test_release_signing_uses_environment_or_untracked_local_properties(self):
         gradle = (ROOT / "app/build.gradle.kts").read_text(encoding="utf-8-sig")
-        self.assertNotIn("signing.properties", gradle)
-        self.assertNotIn("Properties()", gradle)
-        self.assertIn('signingEnv("KEYSTORE_FILE")', gradle)
-        self.assertIn('signingEnv("STORE_PASSWORD")', gradle)
-        self.assertIn('signingEnv("KEY_ALIAS")', gradle)
-        self.assertIn('signingEnv("KEY_PASSWORD")', gradle)
-        self.assertIn('signingEnv("SIGNING_CERT_SHA256")', gradle)
+        gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8-sig")
+        self.assertIn("localSigningProperties", gradle)
+        self.assertIn("signing.properties", gitignore)
+        self.assertIn('signingValue("KEYSTORE_FILE", "storeFile")', gradle)
+        self.assertIn('signingValue("STORE_PASSWORD", "storePassword")', gradle)
+        self.assertIn('signingValue("KEY_ALIAS", "keyAlias")', gradle)
+        self.assertIn('signingValue("KEY_PASSWORD", "keyPassword")', gradle)
+        self.assertIn('signingValue("SIGNING_CERT_SHA256", "certificateSha256")', gradle)
+        self.assertNotRegex(gradle, r'\b(?:storePassword|keyPassword)\s*=.*\?:\s*"[^"\n]+"')
+        self.assertIn('tasks.matching { it.name == "assembleRelease" }', gradle)
+        self.assertIn('dependsOn(validateReleaseCredentials)', gradle)
         self.assertIn("if (signingFile != null) signingConfig = signingConfigs.getByName(\"release\")", gradle)
 
     def test_framework_jar_dependencies_are_exact_api101(self):

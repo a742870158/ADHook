@@ -61,6 +61,8 @@ MAX_ENTRIES = 256
 MAX_MANIFEST_BYTES = 64 * 1024
 MAX_SIGNATURE_BYTES = 4096
 MAX_ASSET_BYTES = 4 * 1024 * 1024
+MAX_README_BYTES = 512 * 1024
+MAX_README_PATH_LENGTH = 128
 MAX_FEATURES = 64
 MAX_TARGETS = 16
 MAX_PROCESSES = 16
@@ -100,14 +102,15 @@ FEATURE_TOOL_SOURCE = JAVA_TOOLS_DIR / "PluginFeatureExtractor.java"
 
 # plugin.properties keys accepted by ``build``.
 PROPERTY_REQUIRED = ("id", "name", "version", "versionCode", "entry", "targets", "description", "authorName")
-PROPERTY_OPTIONAL = frozenset({"authorUrl", "minBaseVersionCode", "assets", "summary", "changelog"})
+PROPERTY_OPTIONAL = frozenset({"authorUrl", "minBaseVersionCode", "assets", "summary", "changelog",
+                               "readme"})
 
 # --- plugin.json -----------------------------------------------------------
 MANIFEST_REQUIRED_KEYS = frozenset({
     "schema", "id", "name", "version", "versionCode", "abi", "minBaseVersionCode",
     "authorName", "description", "entry", "targets", "features", "files",
 })
-MANIFEST_OPTIONAL_KEYS = frozenset({"authorUrl", "publisher"})
+MANIFEST_OPTIONAL_KEYS = frozenset({"authorUrl", "readme", "publisher"})
 TARGET_KEYS = frozenset({"packageName", "label", "primary", "processes"})
 FEATURE_KEYS = frozenset({"id", "name", "description", "defaultEnabled", "implemented"})
 PUBLISHER_KEYS = frozenset({"keyId", "publicKey", "publishedAt"})
@@ -281,6 +284,18 @@ def validate_relative_asset_spec(value: str) -> str:
     if any(part in {"", ".", ".."} for part in parts):
         raise PluginError(f"assets entry must not contain empty, '.' or '..' segments: {value!r}")
     return "/".join(parts)
+
+
+def validate_readme_path(value: str) -> str:
+    """README source path; it is packaged as ``assets/README.md``."""
+    text = validate_relative_asset_spec(value)
+    if len(text) > MAX_README_PATH_LENGTH:
+        raise PluginError(f"readme path is longer than {MAX_README_PATH_LENGTH} characters")
+    if text.startswith("assets/"):
+        raise PluginError("readme path is relative to the plugin directory, not assets/")
+    if not text.lower().endswith((".md", ".markdown")):
+        raise PluginError("readme must point at a .md or .markdown file")
+    return text
 
 
 def validate_zip_entry_name(name: str) -> str:
@@ -499,6 +514,8 @@ def load_plugin_properties(path: Path | str) -> dict:
         "summary": _as_str(raw.get("summary", ""), "summary", minimum=0, maximum=200),
         "changelog": _as_str(raw.get("changelog", ""), "changelog", minimum=0, maximum=4096),
     }
+    if raw.get("readme"):
+        properties["readme"] = validate_readme_path(raw["readme"])
     author_url = raw.get("authorUrl")
     if author_url is not None:
         properties["authorUrl"] = validate_http_url(author_url, "authorUrl")
@@ -718,6 +735,14 @@ def validate_manifest(manifest: Any, *, source: str = "plugin.json") -> dict:
 
     result["features"] = validate_features(manifest.get("features"))
     result["files"] = validate_files_object(manifest.get("files"))
+    if "readme" in manifest:
+        readme = manifest.get("readme")
+        if not isinstance(readme, str):
+            raise PluginError("readme must be a string")
+        readme = validate_readme_path(readme)
+        if f"assets/{readme}" not in result["files"]:
+            raise PluginError(f"readme assets/{readme} is not declared in files")
+        result["readme"] = readme
     if "publisher" in manifest:
         result["publisher"] = validate_publisher(manifest.get("publisher"))
     return result
@@ -1374,6 +1399,32 @@ def extract_features(toolchain: Toolchain, plugin_api: Path, classes_dir: Path,
     return validate_features(features)
 
 
+def _collect_readme(plugin_dir: Path, spec: str) -> tuple[str, bytes] | None:
+    """Packages one Markdown README as ``assets/README.md`` for the console detail page."""
+    if not spec:
+        return None
+    root = plugin_dir.resolve()
+    target = plugin_dir / spec
+    try:
+        resolved = target.resolve()
+    except OSError as error:
+        raise PluginError(f"cannot resolve readme entry {spec!r}: {error}") from error
+    if not resolved.is_relative_to(root):
+        raise PluginError(f"readme entry escapes the plugin source directory: {spec!r}")
+    if not target.is_file():
+        raise PluginError(f"readme file does not exist: {spec!r}")
+    data = target.read_bytes()
+    if len(data) > MAX_README_BYTES:
+        raise PluginError(f"readme {spec!r} exceeds {MAX_README_BYTES} bytes")
+    if b"\x00" in data:
+        raise PluginError(f"readme {spec!r} must not contain NUL bytes")
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise PluginError(f"readme {spec!r} is not valid UTF-8") from error
+    return "assets/README.md", data
+
+
 def _collect_assets(source_dir: Path, specs: Sequence[str]) -> list[tuple[str, bytes]]:
     root = source_dir.resolve()
     collected: dict[str, bytes] = {}
@@ -1418,7 +1469,7 @@ def _add_asset(collected: dict[str, bytes], name: str, data: bytes) -> None:
 
 def _manifest_document(properties: dict, features: Sequence[dict],
                        payload: Mapping[str, bytes], publisher_key_id: str,
-                       public_key_text: str, published_at: int) -> dict:
+                       public_key_text: str, published_at: int, readme: str = "") -> dict:
     manifest: dict[str, Any] = {
         "schema": PLUGIN_SCHEMA,
         "id": properties["id"],
@@ -1443,6 +1494,8 @@ def _manifest_document(properties: dict, features: Sequence[dict],
             "publishedAt": published_at,
         },
     })
+    if readme:
+        manifest["readme"] = readme
     return manifest
 
 
@@ -1559,6 +1612,14 @@ def build_plugin(*, source: Path | str, properties: Path | str, out: Path | str,
         payload: dict[str, bytes] = {DEX_NAME: dex_path.read_bytes()}
         for name, data in assets:
             payload[name] = data
+        readme_manifest = ""
+        readme_entry = _collect_readme(properties_path.parent, properties_data.get("readme", ""))
+        if readme_entry is not None:
+            readme_name, readme_data = readme_entry
+            if readme_name in payload and payload[readme_name] != readme_data:
+                raise PluginError(f"{readme_name} is already packaged with different content")
+            payload[readme_name] = readme_data
+            readme_manifest = "README.md"
         if len(payload) > MAX_ENTRIES - 2:
             raise PluginError(f"plugin payload has too many files ({len(payload)}); the limit is {MAX_ENTRIES - 2}")
 
@@ -1570,7 +1631,7 @@ def build_plugin(*, source: Path | str, properties: Path | str, out: Path | str,
             raise PluginError("public key derivation returned an inconsistent keyId")
 
         manifest = _manifest_document(properties_data, features, payload,
-                                      key_id, public_text, published_at)
+                                      key_id, public_text, published_at, readme_manifest)
         manifest = validate_manifest(manifest, source="generated plugin.json")
         manifest_raw = (json.dumps(manifest, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
         if len(manifest_raw) > MAX_MANIFEST_BYTES:

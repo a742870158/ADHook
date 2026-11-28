@@ -15,7 +15,6 @@ import com.adhook.config.model.CustomRule
 import com.adhook.config.model.FeatureMeta
 import com.adhook.config.model.GlobalConfig
 import com.adhook.config.model.Subscription
-import com.adhook.config.security.HostAuthorizationStore
 import com.adhook.ui.ImportExportHelper
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -46,7 +45,6 @@ data class AppDetailSnapshot(
     val config: AppConfig,
     val features: List<FeatureMeta>,
     val stats: ConfigManager.AppRuntimeStats?,
-    val authorized: Boolean,
     /** Remote commit acknowledgement is distinct from a host consuming the new version. */
     val remotePublication: com.adhook.config.RemotePublicationState? = null,
     val excludeFromRecents: Boolean = false,
@@ -62,7 +60,6 @@ class ConsoleRepository(context: Context, private val io: CoroutineDispatcher = 
     private val appContext = context.applicationContext
     private val manager by lazy { ConfigManager.getInstance(appContext) }
     private val subscriptions by lazy { SubscriptionManager.getInstance(appContext) }
-    private val grants by lazy { HostAuthorizationStore(appContext) }
     private val pluginRepository by lazy { PluginRepository(appContext, io) }
     private val writes = Mutex()
     private val icons = android.util.LruCache<String, ImageBitmap>(80)
@@ -87,7 +84,6 @@ class ConsoleRepository(context: Context, private val io: CoroutineDispatcher = 
                         pluginId = plugin.id,
                         pluginName = plugin.name,
                         pluginVersion = plugin.version,
-                        enabled = plugin.enabled,
                         features = plugin.features.map { it.toFeatureMeta() }
                     )
                 }
@@ -125,7 +121,7 @@ class ConsoleRepository(context: Context, private val io: CoroutineDispatcher = 
         }?.let { target -> target.primary.ifBlank { target.packageName } }
         com.adhook.core.FeatureGuard.registerCatalog(pkg, pluginPrimary, features)
         AppDetailSnapshot(pkg, name, config, features, manager.getRuntimeStats(pkg),
-            grants.isAuthorized(pkg), manager.remotePublicationState, manager.isExcludeFromRecents, plugin)
+            manager.remotePublicationState, manager.isExcludeFromRecents, plugin)
     }
 
     fun observeRuntimeStats(pkg: String): kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.callbackFlow {
@@ -142,24 +138,11 @@ class ConsoleRepository(context: Context, private val io: CoroutineDispatcher = 
     }.conflate()
 
     suspend fun setInspectorEnabled(pkg: String, enabled: Boolean): Boolean = mutate { manager.setInspectorEnabled(pkg, enabled) }
-    suspend fun setHookEnabled(pkg: String, enabled: Boolean): Boolean = mutate { manager.setHookEnabled(pkg, enabled) }
     suspend fun setFeatureEnabled(pkg: String, id: String, enabled: Boolean): Boolean = mutate { manager.setFeatureEnabled(pkg, id, enabled) }
-
-    /**
-     * Explicit host authorization for plugin target packages. Installation alone never grants a
-     * host: the user must confirm this switch before its picker rules/stats may cross the Provider.
-     */
-    suspend fun setHostAuthorized(pkg: String, enabled: Boolean): Boolean = mutate {
-        grants.setUserAuthorized(pkg, enabled)
-    }
 
     suspend fun setRuleEnabled(pkg: String, id: String, enabled: Boolean): Boolean = mutate {
         subscriptions.setRuleEnabled(pkg, id, enabled)
     }
-
-    /** Explicit plugin enable/disable; publishes the routing snapshot and never touches AppConfig. */
-    suspend fun setPluginEnabled(pluginId: String, enabled: Boolean): Boolean =
-        pluginRepository.setEnabled(pluginId, enabled)
 
     suspend fun removeRule(pkg: String, id: String): Boolean = mutate {
         subscriptions.removeRule(pkg, id)

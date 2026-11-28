@@ -24,7 +24,7 @@ public class PluginRuntimeTableTest {
                 "com.example.target.primary", List.of("com.example.target:remote"));
         return new InstalledPlugin("com.example.aa", "Plugin A", "1.0.0", 1,
                 PluginConstants.PLUGIN_ABI, 0, PluginTestFixtures.ENTRY, "", "",
-                List.of(target), new ArrayList<>(), "", true, 1_700_000_000_000L,
+                List.of(target), new ArrayList<>(), "", 1_700_000_000_000L,
                 "", "", "a".repeat(64), "b".repeat(64), "{}");
     }
 
@@ -53,22 +53,22 @@ public class PluginRuntimeTableTest {
         assertTrue(table.routes("com.example.unknown").isEmpty());
     }
 
-    @Test public void disabledPluginsAreExcluded() {
-        InstalledPlugin enabled = PluginTestFixtures.installed("com.example.aa", 1, TARGET);
-        InstalledPlugin disabled = PluginTestFixtures.installed("com.example.bb", 1,
+    @Test public void legacyDisabledFlagNoLongerExcludesAPlugin() {
+        InstalledPlugin first = PluginTestFixtures.installed("com.example.aa", 1, TARGET);
+        InstalledPlugin second = PluginTestFixtures.installed("com.example.bb", 1,
                 "com.example.disabled", "", false);
-        String json = PluginRuntimeTable.build(List.of(enabled, disabled), 5L);
+        String json = PluginRuntimeTable.build(List.of(first, second), 5L);
         assertNotNull(json);
         PluginRuntimeTable table = PluginRuntimeTable.parse(json);
-        assertEquals(1, table.packageCount());
+        assertEquals(2, table.packageCount());
         assertEquals(1, table.routes(TARGET).size());
-        assertTrue(table.routes("com.example.disabled").isEmpty());
+        assertEquals(1, table.routes("com.example.disabled").size());
     }
 
     @Test public void invalidDexHashPluginsAreSkipped() {
         InstalledPlugin broken = new InstalledPlugin("com.example.aa", "Plugin", "1.0.0", 1,
                 PluginConstants.PLUGIN_ABI, 0, PluginTestFixtures.ENTRY, "", "",
-                List.of(new PluginTarget(TARGET, "", "", List.of())), List.of(), "", true, 0L,
+                List.of(new PluginTarget(TARGET, "", "", List.of())), List.of(), "", 0L,
                 "", "", "a".repeat(64), "", "{}");
         String json = PluginRuntimeTable.build(List.of(broken), 1L);
         assertNotNull(json);

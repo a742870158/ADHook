@@ -44,7 +44,7 @@ public class HookRuntimeCacheTest {
         legacy.setAccessible(true);
         @SuppressWarnings("unchecked") Map<String, AppConfig> cache = (Map<String, AppConfig>) legacy.get(null);
         cache.put(PKG, stale);
-        assertFalse(ConfigClient.isHookEnabledCached(PKG));
+        assertTrue(ConfigClient.isHookEnabledCached(PKG));
         assertNull(ConfigClient.getAppConfigCached(PKG));
         assertFalse(ConfigClient.getGlobalConfigCached().isLocalRulesEnabled());
     }
@@ -82,7 +82,7 @@ public class HookRuntimeCacheTest {
                 worker.shutdownNow();
                 assertTrue(worker.awaitTermination(5L, java.util.concurrent.TimeUnit.SECONDS));
             }
-            assertFalse(ConfigClient.isHookEnabledCached(PKG));
+            assertTrue(ConfigClient.isHookEnabledCached(PKG));
         } finally {
             module.set(null, previousModule);
             cache.set(null, previousCache);
@@ -119,7 +119,8 @@ public class HookRuntimeCacheTest {
             assertSame(snapshot.global, ConfigClient.getGlobalConfigCached());
             assertFalse(ConfigClient.getAppConfigCached(PKG).isFeatureEnabled("native_splash", true));
         }
-        assertFalse(ConfigClient.isHookEnabledCached("com.unknown.app"));
+        assertTrue(ConfigClient.isHookEnabledCached("com.unknown.app"));
         assertFalse(ConfigClient.isHookEnabledCached(null));
+        assertFalse(ConfigClient.isHookEnabledCached(".invalid"));
     }
 }

@@ -115,13 +115,10 @@ public class ConfigSecurityIntegrationTest {
         assertFalse(new File(context.getFilesDir(), "adhook_config.json").exists());
     }
 
-    @Test public void runtimeSnapshotRequiresGrantAndOnlyExposesTheOwnedPackage() throws Exception {
-        manager.getAppConfig(HOST).setHookEnabled(true);
+    @Test public void runtimeSnapshotOnlyExposesTheOwnedPackage() throws Exception {
         manager.getAppConfig(HOST).setFeatureEnabled("native_splash", false);
-        manager.getAppConfig(OTHER).setHookEnabled(true);
+        manager.getAppConfig(OTHER).setFeatureEnabled("native_splash", true);
         ShadowBinder.setCallingUid(HOST_UID);
-        assertTrue(call(ConfigProvider.METHOD_GET_HOOK_RUNTIME, HOST, null).isEmpty());
-        assertTrue(new HostAuthorizationStore(context).setUserAuthorized(HOST, true));
         JSONObject snapshot = new JSONObject(call(ConfigProvider.METHOD_GET_HOOK_RUNTIME, HOST, null).getString("json"));
         assertTrue(snapshot.getJSONObject("apps").getJSONObject(HOST).getBoolean("hookEnabled"));
         assertFalse(snapshot.getJSONObject("apps").getJSONObject(HOST)
@@ -138,30 +135,25 @@ public class ConfigSecurityIntegrationTest {
         assertFalse(new File(context.getFilesDir(), "adhook_config.json").exists());
     }
 
-    @Test public void storedConfigAndInspectorFlagDoNotAuthorizeHost() {
-        manager.getAppConfig(HOST).setInspectorEnabled(true);
+    @Test public void installedOwnPackageIsAuthorizedWithoutGrantState() {
+        HostAuthorizationStore grants = new HostAuthorizationStore(context);
         ShadowBinder.setCallingUid(HOST_UID);
-        assertTrue(call(ConfigProvider.METHOD_GET_APP_CONFIG, HOST, null).isEmpty());
-        assertTrue(call(ConfigProvider.METHOD_GET_GLOBAL_CONFIG, null, null).isEmpty());
-        assertFalse(new HostAuthorizationStore(context).isAuthorized(HOST, HOST_UID));
+        assertNotNull(call(ConfigProvider.METHOD_GET_APP_CONFIG, HOST, null).getString("json"));
+        assertNotNull(call(ConfigProvider.METHOD_GET_GLOBAL_CONFIG, null, null).getString("json"));
+        assertTrue(grants.isAuthorized(HOST, HOST_UID));
+        assertFalse(grants.isAuthorized(HOST, HOST_UID + 1));
     }
 
-    @Test public void explicitGrantIsOwnPackageOnlyAndCannotWriteGlobal() {
-        HostAuthorizationStore grants = new HostAuthorizationStore(context);
-        assertTrue(grants.setUserAuthorized(HOST, true));
+    @Test public void defaultAuthorizationIsOwnPackageOnlyAndCannotWriteGlobal() {
         ShadowBinder.setCallingUid(HOST_UID);
         assertNotNull(call(ConfigProvider.METHOD_GET_APP_CONFIG, HOST, null).getString("json"));
         assertTrue(call(ConfigProvider.METHOD_GET_APP_CONFIG, OTHER, null).isEmpty());
         Bundle toggle = new Bundle(); toggle.putString("sdk", "rule_toast"); toggle.putBoolean("enabled", true);
         assertTrue(call(ConfigProvider.METHOD_SET_GLOBAL_SDK_ENABLED, null, toggle).isEmpty());
         assertFalse(manager.getGlobalConfigSnapshot().isRuleToastEnabled());
-        assertFalse(grants.isAuthorized(HOST, HOST_UID + 1));
-        assertTrue(grants.setUserAuthorized(HOST, false));
-        assertTrue(call(ConfigProvider.METHOD_GET_APP_CONFIG, HOST, null).isEmpty());
     }
 
-    @Test public void explicitHostWritesOnlyItsOwnPackage() {
-        assertTrue(new HostAuthorizationStore(context).setUserAuthorized(HOST, true));
+    @Test public void hostWritesOnlyItsOwnPackage() {
         ShadowBinder.setCallingUid(HOST_UID);
         Bundle extras = new Bundle(); extras.putString("featureId", "splash"); extras.putBoolean("enabled", false);
         assertTrue(call(ConfigProvider.METHOD_SET_FEATURE_ENABLED, HOST, extras).getBoolean("success"));
@@ -171,7 +163,6 @@ public class ConfigSecurityIntegrationTest {
     }
 
     @Test public void malformedStatsAndWrongPackageNeverMutateOrPersist() throws Exception {
-        assertTrue(new HostAuthorizationStore(context).setUserAuthorized(HOST, true));
         ShadowBinder.setCallingUid(HOST_UID);
         assertTrue(call(ConfigProvider.METHOD_REPORT_RUNTIME_STATS, HOST, stats("{\"hits\":{\"bad\":-1}}")).isEmpty());
         assertTrue(call(ConfigProvider.METHOD_REPORT_RUNTIME_STATS, OTHER, stats("{\"hits\":{\"ok\":1}}")).isEmpty());
@@ -210,7 +201,7 @@ public class ConfigSecurityIntegrationTest {
         com.adhook.config.model.CustomRule after = manager.getAppConfigSnapshot(HOST).getCustomRules().get(0);
         assertEquals("saved_target", after.getTargetValue());
         assertEquals("collapse", after.getAction());
-        assertFalse(new HostAuthorizationStore(context).isAuthorized(HOST, HOST_UID));
+        assertTrue(new HostAuthorizationStore(context).isAuthorized(HOST, HOST_UID));
     }
 
     @Test public void runtimeStatsSnapshotsDoNotLeakLiveMaps() {
@@ -224,7 +215,6 @@ public class ConfigSecurityIntegrationTest {
     }
 
     @Test public void invalidMetadataAndTruncationAreRejectedBeforeManagerInitialization() throws Exception {
-        assertTrue(new HostAuthorizationStore(context).setUserAuthorized(HOST, true));
         ShadowBinder.setCallingUid(HOST_UID);
         resetManager();
         Field instance = ConfigManager.class.getDeclaredField("sInstance"); instance.setAccessible(true);
@@ -250,23 +240,20 @@ public class ConfigSecurityIntegrationTest {
         }
     }
 
-    @Test public void metadataCannotAuthorizeHostOrImpersonateAnotherPackage() {
+    @Test public void ownershipCannotImpersonateAnotherPackage() {
         ShadowBinder.setCallingUid(HOST_UID);
         Bundle report = stats("{\"hits\":{\"splash\":1}}", HOST, SESSION_A);
-        assertTrue(call(ConfigProvider.METHOD_REPORT_RUNTIME_STATS, HOST, report).isEmpty());
-        assertNull(manager.getRuntimeStats(HOST));
-        assertTrue(new HostAuthorizationStore(context).setUserAuthorized(HOST, true));
+        assertTrue(call(ConfigProvider.METHOD_REPORT_RUNTIME_STATS, HOST, report).getBoolean("success"));
+        assertNotNull(manager.getRuntimeStats(HOST));
         assertTrue(call(ConfigProvider.METHOD_REPORT_RUNTIME_STATS, OTHER,
                 stats("{\"hits\":{\"splash\":1}}", OTHER, SESSION_A)).isEmpty());
         assertTrue(call(ConfigProvider.METHOD_REPORT_RUNTIME_STATS, HOST,
                 stats("{\"hits\":{\"splash\":1}}", OTHER, SESSION_A)).isEmpty());
         assertNull(manager.getRuntimeStats(OTHER));
-        assertNull(manager.getRuntimeStats(HOST));
         assertTrue(manager.snapshotAppConfigs().isEmpty());
     }
 
     @Test public void namedProcessMetadataDoesNotWeakenInnerPacketValidationOrConsumeRateOnMalformedInput() {
-        assertTrue(new HostAuthorizationStore(context).setUserAuthorized(HOST, true));
         ShadowBinder.setCallingUid(HOST_UID);
         for (String json : new String[]{"{\"hits\":{\"good\":1,\"bad\":-1}}", "{\"states\":{\"splash\":\"POISON\"}}",
                 "{\"hits\":{\"splash\":\"1\"}}", "{\"hits\":{\"splash\":1},\"processName\":\"fake\"}"}) {
@@ -283,7 +270,6 @@ public class ConfigSecurityIntegrationTest {
     }
 
     @Test public void rateLimitRemainsPerUidAcrossProcessAndSessionNames() {
-        assertTrue(new HostAuthorizationStore(context).setUserAuthorized(HOST, true));
         ShadowBinder.setCallingUid(HOST_UID);
         assertTrue(call(ConfigProvider.METHOD_REPORT_RUNTIME_STATS, HOST,
                 stats("{\"hits\":{\"splash\":9}}", HOST, SESSION_A)).getBoolean("success"));
@@ -299,7 +285,6 @@ public class ConfigSecurityIntegrationTest {
     }
 
     @Test public void successfulStatsNotifyPackageUriButRejectedPacketsDoNot() {
-        assertTrue(new HostAuthorizationStore(context).setUserAuthorized(HOST, true));
         ShadowBinder.setCallingUid(HOST_UID);
         Uri expected = ConfigProvider.CONTENT_URI.buildUpon().appendPath("runtime-stats").appendPath(HOST).build();
         List<Uri> notifications = new ArrayList<>();
@@ -324,7 +309,6 @@ public class ConfigSecurityIntegrationTest {
     }
 
     @Test public void processSnapshotsSurviveManagerRestartWithoutCreatingOrChangingRuleConfig() throws Exception {
-        assertTrue(new HostAuthorizationStore(context).setUserAuthorized(HOST, true));
         ShadowBinder.setCallingUid(HOST_UID);
         Bundle main = stats("{\"states\":{\"splash\":\"OK\"},\"hits\":{\"splash\":7}}", HOST, SESSION_A);
         main.putBoolean("statsTruncated", true);

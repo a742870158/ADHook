@@ -65,18 +65,14 @@ public class InspectorRuntimeGateTest {
         controller.pause().stop().destroy();
     }
 
-    @Test public void offUnknownAndInspectorDisabledNeverAttachOrStartOverlay() {
+    @Test public void unknownConfigOrInspectorDisabledNeverAttachesOverlay() {
         String pkg = activity.getPackageName();
-        VisualInspector.scheduleAttachFab(activity, pkg, true);
-        VisualInspector.startInspectMode(activity, pkg);
-        assertNull(ReflectionHelpers.getStaticField(VisualInspector.class, "sCurrentOverlay"));
-        assertNull(ReflectionHelpers.getStaticField(VisualInspector.class, "sCurrentFab"));
         Client.app = null;
         VisualInspector.scheduleAttachFab(activity, pkg, true);
         VisualInspector.startInspectMode(activity, pkg);
         assertNull(ReflectionHelpers.getStaticField(VisualInspector.class, "sCurrentOverlay"));
+        assertNull(ReflectionHelpers.getStaticField(VisualInspector.class, "sCurrentFab"));
         Client.app = new AppConfig(pkg);
-        Client.app.setHookEnabled(true);
         Client.app.setInspectorEnabled(false);
         VisualInspector.startInspectMode(activity, pkg);
         assertNull(ReflectionHelpers.getStaticField(VisualInspector.class, "sCurrentOverlay"));
@@ -92,10 +88,7 @@ public class InspectorRuntimeGateTest {
         ReflectionHelpers.setField(overlay, "selectedView", selected);
         Method toggle = overlayType.getDeclaredMethod("toggleCollapseTest");
         toggle.setAccessible(true);
-        toggle.invoke(overlay); // Hook off: no preview mutation.
-        assertEquals(View.VISIBLE, selected.getVisibility());
-        Client.app.setHookEnabled(true);
-        toggle.invoke(overlay);
+        toggle.invoke(overlay); // Hook is on by default and the inspector switch is enabled.
         assertEquals(View.GONE, selected.getVisibility());
         Object otherOwner = new Object();
         ViewCollapser.preventExpansion(selected, otherOwner);

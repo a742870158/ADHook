@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * 安全说明：仅正式 API101 LibXposed remote preferences 与受调用方鉴权保护的
  * ConfigProvider（仅工作线程兜底）。不读取 XSharedPreferences 或 CE/DE 文件镜像。
- * 宿主 initializeHookRuntime 后业务查询只读独立内存快照，未知策略不允许执行 Hook。
+ * 宿主 initializeHookRuntime 后业务查询只读独立内存快照；Hook 默认执行，插件 feature 仍按显式配置门控。
  * 旧版本的 /sdcard、/data/local/tmp 等外部可写文件回退通道已删除，防止任意应用投毒配置。
  *
  * 一致性：宿主工作线程按 CACHE_TTL_MS 刷新，版本推进后原子替换业务快照。
@@ -110,10 +110,14 @@ public final class ConfigClient {
         }
     }
 
-    /** UNKNOWN is false: installed callbacks must leave the host business operation unchanged. */
+    /**
+     * Hook is enabled by default inside an injected process. A missing AppConfig is not "off";
+     * only invalid package names are rejected. Feature callbacks are still gated separately.
+     */
     public static boolean isHookEnabledCached(String packageName) {
+        if (!com.adhook.config.security.ConfigInputPolicy.isPackageName(packageName)) return false;
         AppConfig app = getAppConfigCached(packageName);
-        return app != null && app.isHookEnabled();
+        return app == null || app.isHookEnabled();
     }
 
     /** Pure memory, no TTL/source reads. Snapshot objects are read-only to consumers. */

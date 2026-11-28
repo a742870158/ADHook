@@ -17,7 +17,7 @@ public class InstalledPluginRoundTripTest {
                 PluginConstants.PLUGIN_ABI, 0,
                 "com.example.Entry", "作者", "描述",
                 List.of(new PluginTarget("com.example.host", "宿主", "com.example.host", List.of())),
-                List.of(), "local", true, 1L, "", "",
+                List.of(), "local", 1L, "", "",
                 "a".repeat(64), "b".repeat(64), manifestJson);
     }
 

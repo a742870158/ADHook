@@ -72,8 +72,9 @@ public final class PluginFeature {
         return json;
     }
 
+    /** Plugin features always start disabled; the manifest default is display-only now. */
     public FeatureMeta toFeatureMeta() {
-        return new FeatureMeta(id, name, description, defaultEnabled, implemented);
+        return new FeatureMeta(id, name, description, false, implemented);
     }
 
     public String getId() { return id; }

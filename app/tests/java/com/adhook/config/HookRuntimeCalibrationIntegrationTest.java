@@ -113,14 +113,14 @@ public class HookRuntimeCalibrationIntegrationTest {
         long now = SystemClock.elapsedRealtime();
         worker.submit(() -> ConfigClient.finishHookRuntimeRefresh(staleRemote, context, now)).get(5L, TimeUnit.SECONDS);
         assertEquals(1, calls.get());
-        assertFalse(ConfigClient.isHookEnabledCached(PKG));
+        assertTrue(ConfigClient.isHookEnabledCached(PKG));
         assertEquals(101L, ((HookRuntimeSnapshot) runtimeField.get(null)).updatedAt);
         worker.submit(() -> ConfigClient.finishHookRuntimeRefresh(staleRemote, context, now + 5000L)).get(5L, TimeUnit.SECONDS);
         assertEquals(1, calls.get());
-        assertFalse(ConfigClient.isHookEnabledCached(PKG));
+        assertTrue(ConfigClient.isHookEnabledCached(PKG));
         worker.submit(() -> ConfigClient.finishHookRuntimeRefresh(staleRemote, context, now + 30000L)).get(5L, TimeUnit.SECONDS);
         assertEquals(2, calls.get());
-        assertFalse(ConfigClient.isHookEnabledCached(PKG));
+        assertTrue(ConfigClient.isHookEnabledCached(PKG));
     }
 
     @Test public void recoveredSameVersionFullRootCanFillPackagesAfterScopedCalibration() throws Exception {
@@ -135,7 +135,7 @@ public class HookRuntimeCalibrationIntegrationTest {
         HookRuntimeSnapshot full = HookRuntimeSnapshot.parseFull(recovered);
         worker.submit(() -> ConfigClient.finishHookRuntimeRefresh(full, context, now + 5000L)).get(5L, TimeUnit.SECONDS);
         assertTrue(((HookRuntimeSnapshot) runtimeField.get(null)).complete);
-        assertFalse(ConfigClient.isHookEnabledCached(PKG));
+        assertTrue(ConfigClient.isHookEnabledCached(PKG));
         assertTrue(ConfigClient.isHookEnabledCached(other.getPackageName()));
         assertFalse(ConfigClient.getAppConfigCached(other.getPackageName()).isFeatureEnabled("native_splash", true));
         assertEquals(1, calls.get());
@@ -167,7 +167,7 @@ public class HookRuntimeCalibrationIntegrationTest {
         assertTrue(calibrated.isPackageComplete(PKG));
         assertFalse(calibrated.complete);
         assertFalse(calibrated.isPackageComplete(other.getPackageName()));
-        assertFalse(ConfigClient.isHookEnabledCached(other.getPackageName()));
+        assertTrue(ConfigClient.isHookEnabledCached(other.getPackageName()));
         worker.submit(() -> ConfigClient.finishHookRuntimeRefresh(null, context, now + 30000L)).get(5L, TimeUnit.SECONDS);
         assertEquals(2, calls.get());
         assertSame("An already complete same-version package is not republished", calibrated, runtimeField.get(null));
@@ -182,7 +182,7 @@ public class HookRuntimeCalibrationIntegrationTest {
         worker.submit(() -> ConfigClient.finishHookRuntimeRefresh(null, context, now)).get(5L, TimeUnit.SECONDS);
         HookRuntimeSnapshot calibrated = (HookRuntimeSnapshot) runtimeField.get(null);
         assertNull(ConfigClient.getAppConfigCached(PKG));
-        assertFalse(ConfigClient.isHookEnabledCached(PKG));
+        assertTrue(ConfigClient.isHookEnabledCached(PKG));
         assertTrue(calibrated.isPackageComplete(PKG));
         worker.submit(() -> ConfigClient.finishHookRuntimeRefresh(null, context, now + 30000L)).get(5L, TimeUnit.SECONDS);
         assertSame(calibrated, runtimeField.get(null));
@@ -197,7 +197,7 @@ public class HookRuntimeCalibrationIntegrationTest {
         assertEquals(1, calls.get());
         assertSame(launch, runtimeField.get(null));
         assertFalse(launch.isPackageComplete(PKG));
-        assertFalse(ConfigClient.isHookEnabledCached(PKG));
+        assertTrue(ConfigClient.isHookEnabledCached(PKG));
     }
 
     @Test public void mainThreadRefreshCannotCallProviderOrConsumeTheWorkerBudget() throws Exception {
@@ -206,6 +206,6 @@ public class HookRuntimeCalibrationIntegrationTest {
         assertEquals(0, calls.get());
         worker.submit(() -> ConfigClient.finishHookRuntimeRefresh(staleRemote, context, now)).get(5L, TimeUnit.SECONDS);
         assertEquals(1, calls.get());
-        assertFalse(ConfigClient.isHookEnabledCached(PKG));
+        assertTrue(ConfigClient.isHookEnabledCached(PKG));
     }
 }

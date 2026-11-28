@@ -28,7 +28,6 @@ public final class InstalledPlugin {
     private final List<PluginTarget> targets;
     private final List<PluginFeature> features;
     private final String sourceId;
-    private final boolean enabled;
     private final long installedAt;
     private final String publisherKeyId;
     private final String publisherFingerprint;
@@ -39,7 +38,7 @@ public final class InstalledPlugin {
     public InstalledPlugin(String id, String name, String version, int versionCode, int abi,
                            int minBaseVersionCode, String entry, String author, String description,
                            List<PluginTarget> targets, List<PluginFeature> features,
-                           String sourceId, boolean enabled, long installedAt,
+                           String sourceId, long installedAt,
                            String publisherKeyId, String publisherFingerprint,
                            String zipSha256, String dexSha256, String manifestJson) {
         this.id = id;
@@ -56,7 +55,6 @@ public final class InstalledPlugin {
         this.features = Collections.unmodifiableList(
                 features != null ? new ArrayList<>(features) : new ArrayList<>());
         this.sourceId = sourceId != null ? sourceId : "";
-        this.enabled = enabled;
         this.installedAt = installedAt;
         this.publisherKeyId = publisherKeyId != null ? publisherKeyId : "";
         this.publisherFingerprint = publisherFingerprint != null ? publisherFingerprint : "";
@@ -90,9 +88,7 @@ public final class InstalledPlugin {
             String dexSha256 = optionalString(json, "dexSha256", 64);
             if (!dexSha256.isEmpty() && !PluginConstants.isHexSha256(dexSha256)) return null;
             long installedAt = requireLong(json, "installedAt", 0L);
-            Object rawEnabled = json.opt("enabled");
-            if (!(rawEnabled instanceof Boolean)) return null;
-            boolean enabled = (Boolean) rawEnabled;
+            // Legacy enabled=false is ignored: installed plugins are always enabled now.
             // The stored manifest is raw JSON text and commonly ends with a newline; it is not a
             // display field, so it only needs a length budget and a valid embedded JSON document.
             Object rawManifestJson = json.opt("manifestJson");
@@ -131,7 +127,7 @@ public final class InstalledPlugin {
                 }
             }
             return new InstalledPlugin(id, name, version, versionCode, abi, minBaseVersionCode,
-                    entry, author, description, targets, features, sourceId, enabled, installedAt,
+                    entry, author, description, targets, features, sourceId, installedAt,
                     publisherKeyId, publisherFingerprint, zipSha256, dexSha256, manifestJson);
         } catch (Exception malformed) {
             return null;
@@ -157,7 +153,8 @@ public final class InstalledPlugin {
             for (PluginFeature feature : features) featureArray.put(feature.toJson());
             json.put("features", featureArray);
             json.put("sourceId", sourceId);
-            json.put("enabled", enabled);
+            // Compatibility field: installed plugins are always enabled, but older readers expect it.
+            json.put("enabled", true);
             json.put("installedAt", installedAt);
             json.put("publisherKeyId", publisherKeyId);
             json.put("publisherFingerprint", publisherFingerprint);
@@ -179,15 +176,9 @@ public final class InstalledPlugin {
         }
     }
 
-    public InstalledPlugin copyWithEnabled(boolean newEnabled) {
-        return new InstalledPlugin(id, name, version, versionCode, abi, minBaseVersionCode, entry,
-                author, description, targets, features, sourceId, newEnabled, installedAt,
-                publisherKeyId, publisherFingerprint, zipSha256, dexSha256, manifestJson);
-    }
-
     public InstalledPlugin copyWithSourceId(String newSourceId) {
         return new InstalledPlugin(id, name, version, versionCode, abi, minBaseVersionCode, entry,
-                author, description, targets, features, newSourceId, enabled, installedAt,
+                author, description, targets, features, newSourceId, installedAt,
                 publisherKeyId, publisherFingerprint, zipSha256, dexSha256, manifestJson);
     }
 
@@ -210,9 +201,6 @@ public final class InstalledPlugin {
     public List<PluginTarget> getTargets() { return targets; }
     public List<PluginFeature> getFeatures() { return features; }
     public String getSourceId() { return sourceId; }
-    public boolean isEnabled() { return enabled; }
-    /** Kotlin-visible boolean property alias ({@code plugin.enabled}) without renaming the contract. */
-    public boolean getEnabled() { return enabled; }
     public long getInstalledAt() { return installedAt; }
     public String getPublisherKeyId() { return publisherKeyId; }
     public String getPublisherFingerprint() { return publisherFingerprint; }

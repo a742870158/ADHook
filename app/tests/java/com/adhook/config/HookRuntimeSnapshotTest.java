@@ -34,18 +34,18 @@ public class HookRuntimeSnapshotTest {
         assertEquals(123L, snapshot.updatedAt);
     }
 
-    @Test public void hookSwitchCombinationsRemainIndependent() throws Exception {
-        for (boolean hook : new boolean[]{false, true}) {
+    @Test public void legacyOptOutIsIgnoredAndHookRemainsOn() throws Exception {
+        for (boolean legacy : new boolean[]{false, true}) {
             AppConfig app = new AppConfig("com.test.app");
-            app.setHookEnabled(hook);
+            app.setHookEnabled(legacy);
             app.setFeatureEnabled("native_splash", false);
             JSONObject root = full(app, new GlobalConfig());
             HookRuntimeSnapshot complete = HookRuntimeSnapshot.parseFull(root);
             HookRuntimeSnapshot launch = HookRuntimeSnapshot.parseLaunch(HookLaunchSnapshot.fromConfig(root));
             assertNotNull(complete);
             assertNotNull(launch);
-            assertEquals(hook, complete.apps.get("com.test.app").isHookEnabled());
-            assertEquals(hook, launch.apps.get("com.test.app").isHookEnabled());
+            assertTrue(complete.apps.get("com.test.app").isHookEnabled());
+            assertTrue(launch.apps.get("com.test.app").isHookEnabled());
             assertFalse(launch.apps.get("com.test.app").isFeatureEnabled("native_splash", true));
             assertFalse(new JSONObject(HookLaunchSnapshot.fromConfig(root)).getJSONObject("apps")
                     .getJSONObject("com.test.app").has("customRules"));
@@ -88,7 +88,7 @@ public class HookRuntimeSnapshotTest {
         HookRuntimeSnapshot snapshot = HookRuntimeSnapshot.parseFull(root);
         assertNotNull(snapshot);
         assertTrue(snapshot.apps.get("com.test.app").isInspectorEnabled());
-        assertFalse(snapshot.apps.get("com.test.app").isHookEnabled());
+        assertTrue(snapshot.apps.get("com.test.app").isHookEnabled());
         assertEquals(before, root.toString());
         assertNull(app.getRawHookEnabled());
         assertNull(snapshot.apps.get("com.missing.app"));

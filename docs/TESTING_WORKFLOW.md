@@ -21,7 +21,7 @@
 | --- | --- | --- |
 | **迭代档** | 每改完一处，想确认没写坏 | `quality_checks.py` + 受影响测试类的 `--tests` |
 | **提交档** | `git commit` / PR 前 | 全量 JVM + `lintDebug` + 全量 `tools/tests` + `verifyPluginAbiSurface` |
-| **发布档** | 打 Tag（只由 CI） | 提交档全部 + `lintRelease` + `assembleRelease` + `verifyPluginAbiMapping` + 真实证书验签 |
+| **发布档** | 打 Tag（发布只由 CI）；本地设备验证可随时用正式签名包 | 提交档全部 + `lintRelease` + `assembleRelease` + `verifyPluginAbiMapping` + 真实证书验签；本地设备验证可额外 `adb install -r` |
 
 - `lintRelease` 只在发布档跑：CI [quality.yml](../.github/workflows/quality.yml) 也只跑 `lintDebug`，Release 工作流负责 `assembleRelease` 与真实证书验签。
 - [AGENTS](../AGENTS.md) 第 16 条约束的是发布门禁；它不要求每改一行就跑全量，但也不允许在发布前跳过全量。
@@ -52,7 +52,7 @@ python -B -m unittest discover -s tools/tests -p 'test_*.py'
 
 ### 发布档
 
-在仓库根执行[工程验证与安全发布](<QUALITY_AND_RELEASE.md#构建与发布>)里的 GitHub Actions 流程：版本 Tag 通过质量门禁后，由 Release 工作流执行 `assembleRelease`、`verifyPluginAbiMapping`、真实证书验签与发布。本地不跑签名构建，也不产出 APK。
+正式发布在仓库根按[工程验证与安全发布](<QUALITY_AND_RELEASE.md#构建与发布>)的 GitHub Actions 流程执行：版本 Tag 通过质量门禁后，由 Release 工作流执行 `assembleRelease`、`verifyPluginAbiMapping`、真实证书验签与发布。本地可用同一正式证书按[本地正式签名构建与设备验证](<QUALITY_AND_RELEASE.md#本地正式签名构建与设备验证>)构建、验签并安装到测试设备，但不发布。
 
 ## 定位测试
 

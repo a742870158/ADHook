@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 fun AdCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
+    contentPadding: PaddingValues = PaddingValues(16.dp),
     content: @Composable ColumnScope.() -> Unit
 ) {
     if (onClick != null) {
@@ -39,7 +40,7 @@ fun AdCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(contentPadding),
                 content = content
             )
         }
@@ -55,7 +56,7 @@ fun AdCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(contentPadding),
                 content = content
             )
         }

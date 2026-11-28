@@ -159,7 +159,7 @@ public class HookRuntimeContextInitTest {
         assertTrue(immediate.isEmpty());
         Sources.full = snapshot(false, 101L);
         periodic.get(0).run();
-        assertFalse(ConfigClient.isHookEnabledCached(PKG));
+        assertTrue(ConfigClient.isHookEnabledCached(PKG));
         HookRuntimeSnapshot current = ReflectionHelpers.getStaticField(ConfigClient.class, "sHookRuntime");
         assertEquals(101L, current.updatedAt);
     }
